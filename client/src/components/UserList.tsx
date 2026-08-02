@@ -40,10 +40,21 @@ export function UserList({ users, hasNextPage, isFetchingNextPage, fetchNextPage
    */
   const [scrollMargin, setScrollMargin] = useState(0);
 
+  /**
+   * Deliberately re-measured on every render rather than once on mount. Content
+   * above the list changes height as filters are applied — the chip row wraps to
+   * a second line, the result count changes — and a stale offset would position
+   * every row by exactly that error. Reading `offsetTop` is cheap; being wrong
+   * is not.
+   */
   useLayoutEffect(() => {
+    const next = listRef.current?.offsetTop ?? 0;
+    setScrollMargin((current) => (current === next ? current : next));
+  });
+
+  useLayoutEffect(() => {
+    // A viewport resize can reflow the header without re-rendering this list.
     const measure = () => setScrollMargin(listRef.current?.offsetTop ?? 0);
-    measure();
-    // The header wraps at narrow widths, which moves the list down the page.
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);

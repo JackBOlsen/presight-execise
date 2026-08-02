@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActiveFilters } from './components/ActiveFilters';
+import { BackToTop } from './components/BackToTop';
+import { FilterDrawer } from './components/FilterDrawer';
 import { FilterSidebar } from './components/FilterSidebar';
 import { SearchInput } from './components/SearchInput';
 import { SortControls } from './components/SortControls';
 import { UserList } from './components/UserList';
+import { EmptyState } from './components/states/EmptyState';
+import { ErrorState } from './components/states/ErrorState';
+import { UserListSkeleton } from './components/states/UserListSkeleton';
 import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { useDirectoryFacets, useDirectoryUsers } from './hooks/useDirectoryData';
 import { useDirectoryParams } from './hooks/useDirectoryParams';
@@ -21,6 +26,9 @@ export default function App() {
     clearFilters,
   } = useDirectoryParams();
   const { resolved, toggle } = useTheme();
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   // The field updates instantly; only the resulting query waits.
   const [draft, setDraft] = useState(state.q);
@@ -40,12 +48,26 @@ export default function App() {
   const facets = useDirectoryFacets(state);
 
   const isTyping = draft !== state.q;
+  const activeFilterCount = state.hobbies.length + state.nationalities.length + (state.q ? 1 : 0);
+
+  const sidebar = (
+    <FilterSidebar
+      facets={facets.data}
+      isLoading={facets.isPending}
+      isError={facets.isError}
+      onRetry={() => void facets.refetch()}
+      selectedHobbies={state.hobbies}
+      selectedNationalities={state.nationalities}
+      onToggleHobby={toggleHobby}
+      onToggleNationality={toggleNationality}
+    />
+  );
 
   return (
     <div className="min-h-dvh">
-      <header className="border-border bg-surface/85 sticky top-0 z-10 border-b backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <h1 className="text-text text-base font-semibold tracking-tight whitespace-nowrap">
+      <header className="border-border bg-surface/85 sticky top-0 z-30 border-b backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+          <h1 className="text-text hidden text-base font-semibold tracking-tight whitespace-nowrap sm:block">
             User Directory
           </h1>
 
@@ -89,23 +111,33 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[248px_1fr] lg:gap-8">
+      <main className="mx-auto max-w-6xl px-4 py-6 lg:grid lg:grid-cols-[248px_1fr] lg:gap-8">
         {/* Sticky because the page itself scrolls: the filters must stay
-            reachable while fifty thousand rows run past them. */}
-        <aside className="border-border bg-surface rounded-card border p-4 lg:sticky lg:top-[4.75rem] lg:self-start">
-          <FilterSidebar
-            facets={facets.data}
-            isLoading={facets.isPending}
-            isError={facets.isError}
-            onRetry={() => void facets.refetch()}
-            selectedHobbies={state.hobbies}
-            selectedNationalities={state.nationalities}
-            onToggleHobby={toggleHobby}
-            onToggleNationality={toggleNationality}
-          />
+            reachable while fifty thousand rows run past them. Hidden below the
+            breakpoint, where the same content appears in the drawer. */}
+        <aside className="border-border bg-surface rounded-card hidden border p-4 lg:sticky lg:top-[4.75rem] lg:block lg:self-start">
+          {sidebar}
         </aside>
 
         <section className="min-w-0">
+          <div className="mb-4 flex items-center gap-3">
+            <FilterDrawer
+              open={drawerOpen}
+              onOpen={() => setDrawerOpen(true)}
+              onClose={closeDrawer}
+              activeCount={activeFilterCount}
+              resultCount={users.total}
+            >
+              {sidebar}
+            </FilterDrawer>
+
+            <p className="text-text-muted text-sm">
+              <span className="text-text font-medium">{users.total.toLocaleString('en-US')}</span>{' '}
+              {users.total === 1 ? 'person' : 'people'}
+              {hasFilters && <span className="text-text-subtle"> matching your filters</span>}
+            </p>
+          </div>
+
           <ActiveFilters
             query={state.q}
             hobbies={state.hobbies}
@@ -116,40 +148,37 @@ export default function App() {
             onClearAll={clearFilters}
           />
 
-          <div className="text-text-muted mb-3 flex items-center gap-3 text-sm">
-            <span>
-              <span className="text-text font-medium">{users.total.toLocaleString('en-US')}</span>{' '}
-              {users.total === 1 ? 'person' : 'people'}
-            </span>
-            {hasFilters && <span className="text-text-subtle">matching your filters</span>}
-          </div>
-
-          {users.isInitialLoading && <p className="text-text-subtle text-sm">Loading…</p>}
-
-          {users.isError && (
-            <p className="text-danger-text text-sm">
-              {users.error instanceof Error ? users.error.message : 'Something went wrong.'}
-            </p>
-          )}
-
-          {!users.isInitialLoading && !users.isError && users.users.length === 0 && (
-            <p className="text-text-subtle text-sm">No people match these filters.</p>
-          )}
-
-          {/* Dimmed rather than emptied while a new filter loads, so the page
-              does not collapse and reflow on every keystroke. */}
-          <div
-            className={users.isRefreshing ? 'opacity-60 transition-opacity' : 'transition-opacity'}
-          >
-            <UserList
-              users={users.users}
-              hasNextPage={users.hasNextPage}
-              isFetchingNextPage={users.isFetchingNextPage}
-              fetchNextPage={users.fetchNextPage}
+          {users.isInitialLoading ? (
+            <UserListSkeleton />
+          ) : users.isError ? (
+            <ErrorState error={users.error} onRetry={() => void users.refetch()} />
+          ) : users.users.length === 0 ? (
+            <EmptyState
+              query={state.q}
+              hobbies={state.hobbies}
+              nationalities={state.nationalities}
+              onClearFilters={clearFilters}
             />
-          </div>
+          ) : (
+            // Dimmed rather than emptied while a new filter loads, so the page
+            // does not collapse and reflow on every keystroke.
+            <div
+              className={
+                users.isRefreshing ? 'opacity-60 transition-opacity' : 'transition-opacity'
+              }
+            >
+              <UserList
+                users={users.users}
+                hasNextPage={users.hasNextPage}
+                isFetchingNextPage={users.isFetchingNextPage}
+                fetchNextPage={users.fetchNextPage}
+              />
+            </div>
+          )}
         </section>
       </main>
+
+      <BackToTop />
     </div>
   );
 }

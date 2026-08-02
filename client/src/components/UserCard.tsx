@@ -68,7 +68,9 @@ export function UserCard({ user }: { user: User }) {
         {shown.map((hobby) => (
           <span
             key={hobby}
-            className="bg-accent-soft text-accent-text max-w-[9rem] truncate rounded-full px-2.5 py-1 text-xs font-medium"
+            // Allowed to shrink so that on a narrow screen the hobbies compress
+            // rather than pushing the "+n" counter out of the card entirely.
+            className="bg-accent-soft text-accent-text min-w-0 max-w-[9rem] shrink truncate rounded-full px-2.5 py-1 text-xs font-medium"
           >
             {hobby}
           </span>

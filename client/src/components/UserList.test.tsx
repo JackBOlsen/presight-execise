@@ -58,6 +58,38 @@ describe('UserList', () => {
     expect(new Set(steps).size).toBe(1);
   });
 
+  it('re-measures its offset when content above it changes height', () => {
+    // The chip row wraps to a second line as filters are applied, pushing the
+    // list down the page. A stale offset would misposition every row by exactly
+    // that amount, since the window virtualizer measures against the document.
+    let offset = 100;
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get() {
+        return offset;
+      },
+    });
+
+    const { rerender } = render(<UserList {...defaults} users={buildUsers(20)} />);
+    const firstOffset = Number.parseInt(
+      screen.getAllByRole('listitem')[0]!.style.transform.replace(/\D+/g, ''),
+      10,
+    );
+
+    offset = 160;
+    rerender(<UserList {...defaults} users={buildUsers(21)} />);
+    const secondOffset = Number.parseInt(
+      screen.getAllByRole('listitem')[0]!.style.transform.replace(/\D+/g, ''),
+      10,
+    );
+
+    // The row's own position is relative to the list, so compensating for the
+    // larger offset keeps it where it belongs rather than shifting it down.
+    expect(secondOffset).toBe(firstOffset);
+
+    delete (HTMLElement.prototype as { offsetTop?: number }).offsetTop;
+  });
+
   describe('infinite loading', () => {
     it('asks for the next page when the end of the loaded data is in view', async () => {
       const fetchNextPage = vi.fn();

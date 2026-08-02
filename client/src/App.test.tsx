@@ -135,7 +135,42 @@ describe('App', () => {
         : usersResponse({ data: [], total: 0 }),
     );
     renderApp('/?q=zzzz');
-    expect(await screen.findByText('No people match these filters.')).toBeInTheDocument();
+    expect(await screen.findByText('No people found')).toBeInTheDocument();
+    // The state names what produced the dead end, rather than just reporting it.
+    expect(screen.getByText(/matching “zzzz”/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear all filters' })).toBeInTheDocument();
+  });
+
+  it('shows the designed error state with a retry', async () => {
+    // Only the list fails, so the sidebar's own retry does not confuse the
+    // assertion — and this is the more interesting case anyway: the two regions
+    // fail independently.
+    stubApi((url) =>
+      url.includes('/facets')
+        ? facetsResponse()
+        : new Response(
+            JSON.stringify({ error: { code: 'internal_error', message: 'Server fell over.' } }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
+          ),
+    );
+    renderApp();
+    expect(await screen.findByText('Could not load the directory')).toBeInTheDocument();
+    expect(screen.getByText('Server fell over.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    // The sidebar loaded fine and stays usable.
+    expect(within(screen.getByRole('complementary')).getByText('Chess')).toBeInTheDocument();
+  });
+
+  it('opens and closes the mobile filter drawer', async () => {
+    stubApi();
+    renderApp();
+    await screen.findByText('First1 Last1');
+
+    await userEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close filters' }));
+    await waitFor(() => expect(document.body.style.overflow).not.toBe('hidden'));
   });
 
   it('surfaces the API error message', async () => {
