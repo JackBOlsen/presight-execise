@@ -1,20 +1,25 @@
 import { useEffect, useState } from 'react';
-import { SORT_FIELDS, SORT_ORDERS } from 'presight-shared';
+import { ActiveFilters } from './components/ActiveFilters';
+import { FilterSidebar } from './components/FilterSidebar';
+import { SearchInput } from './components/SearchInput';
+import { SortControls } from './components/SortControls';
 import { UserList } from './components/UserList';
 import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { useDirectoryFacets, useDirectoryUsers } from './hooks/useDirectoryData';
 import { useDirectoryParams } from './hooks/useDirectoryParams';
 import { useTheme } from './hooks/useTheme';
 
-/**
- * Foundation shell.
- *
- * Enough of the application to prove the whole path works end to end — URL
- * state, debounced input, both queries, theming — before the virtualised list,
- * the user card and the facet sidebar replace these placeholders.
- */
 export default function App() {
-  const { state, hasFilters, setQuery, setSort, toggleOrder, clearFilters } = useDirectoryParams();
+  const {
+    state,
+    hasFilters,
+    setQuery,
+    setSort,
+    toggleOrder,
+    toggleHobby,
+    toggleNationality,
+    clearFilters,
+  } = useDirectoryParams();
   const { resolved, toggle } = useTheme();
 
   // The field updates instantly; only the resulting query waits.
@@ -26,7 +31,7 @@ export default function App() {
   }, [debounced, state.q, setQuery]);
 
   // Keeps the field in step when the URL changes from elsewhere — the back
-  // button, or a shared link opened in place.
+  // button, a shared link opened in place, or a chip being removed.
   useEffect(() => {
     setDraft((current) => (current === state.q ? current : state.q));
   }, [state.q]);
@@ -34,80 +39,89 @@ export default function App() {
   const users = useDirectoryUsers(state);
   const facets = useDirectoryFacets(state);
 
+  const isTyping = draft !== state.q;
+
   return (
     <div className="min-h-dvh">
-      <header className="border-border bg-surface/80 sticky top-0 z-10 border-b backdrop-blur">
+      <header className="border-border bg-surface/85 sticky top-0 z-10 border-b backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <h1 className="text-text mr-auto text-lg font-semibold tracking-tight">User Directory</h1>
+          <h1 className="text-text text-base font-semibold tracking-tight whitespace-nowrap">
+            User Directory
+          </h1>
 
-          <input
+          <SearchInput
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Search by name"
-            aria-label="Search by first or last name"
-            className="border-border bg-canvas text-text placeholder:text-text-subtle focus:border-accent rounded-control w-56 border px-3 py-2 text-sm transition-colors"
+            onChange={setDraft}
+            isSearching={isTyping || users.isRefreshing}
           />
 
-          <select
-            value={state.sort}
-            onChange={(event) => setSort(event.target.value as (typeof SORT_FIELDS)[number])}
-            aria-label="Sort by"
-            className="border-border bg-canvas text-text rounded-control border px-3 py-2 text-sm"
-          >
-            {SORT_FIELDS.map((field) => (
-              <option key={field} value={field}>
-                {field.replace('_', ' ')}
-              </option>
-            ))}
-          </select>
+          <div className="ml-auto flex items-center gap-2">
+            <SortControls
+              sort={state.sort}
+              order={state.order}
+              onSortChange={setSort}
+              onOrderToggle={toggleOrder}
+            />
 
-          <button
-            type="button"
-            onClick={toggleOrder}
-            aria-label={`Sort ${state.order === 'asc' ? 'ascending' : 'descending'}`}
-            className="border-border bg-canvas text-text hover:bg-surface-hover rounded-control border px-3 py-2 text-sm"
-          >
-            {state.order === 'asc' ? '↑' : '↓'}{' '}
-            {SORT_ORDERS.indexOf(state.order) === 0 ? 'Asc' : 'Desc'}
-          </button>
-
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label="Toggle colour theme"
-            className="border-border bg-canvas text-text hover:bg-surface-hover rounded-control border px-3 py-2 text-sm"
-          >
-            {resolved === 'dark' ? '☾' : '☀'}
-          </button>
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label="Toggle colour theme"
+              className="border-border bg-canvas text-text-muted hover:border-border-strong hover:text-text rounded-control border p-2 transition-colors"
+            >
+              {resolved === 'dark' ? (
+                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="h-4 w-4">
+                  <path d="M10 2a8 8 0 1 0 8 8 6.5 6.5 0 0 1-8-8Z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="h-4 w-4">
+                  <circle cx="10" cy="10" r="3.5" fill="currentColor" />
+                  <path
+                    d="M10 2v1.5M10 16.5V18M18 10h-1.5M3.5 10H2m13.66-5.66-1.06 1.06M5.4 14.6l-1.06 1.06m11.32 0-1.06-1.06M5.4 5.4 4.34 4.34"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[260px_1fr]">
-        {/* Sticky now that the page itself scrolls: the filters must stay
-            reachable while the list runs past them. */}
-        <aside className="border-border bg-surface rounded-card border p-4 lg:sticky lg:top-[4.5rem] lg:self-start">
-          <h2 className="text-text mb-3 text-sm font-semibold">Filters</h2>
-          {facets.isPending && <p className="text-text-subtle text-sm">Loading facets…</p>}
-          {facets.isError && <p className="text-danger-text text-sm">Could not load filters.</p>}
-          {facets.data && (
-            <div className="space-y-4 text-sm">
-              <FacetPreview title="Top hobbies" values={facets.data.hobbies} />
-              <FacetPreview title="Top nationalities" values={facets.data.nationalities} />
-            </div>
-          )}
+      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[248px_1fr] lg:gap-8">
+        {/* Sticky because the page itself scrolls: the filters must stay
+            reachable while fifty thousand rows run past them. */}
+        <aside className="border-border bg-surface rounded-card border p-4 lg:sticky lg:top-[4.75rem] lg:self-start">
+          <FilterSidebar
+            facets={facets.data}
+            isLoading={facets.isPending}
+            isError={facets.isError}
+            onRetry={() => void facets.refetch()}
+            selectedHobbies={state.hobbies}
+            selectedNationalities={state.nationalities}
+            onToggleHobby={toggleHobby}
+            onToggleNationality={toggleNationality}
+          />
         </aside>
 
-        <section>
-          <div className="text-text-muted mb-3 flex items-center gap-3 text-sm" aria-live="polite">
+        <section className="min-w-0">
+          <ActiveFilters
+            query={state.q}
+            hobbies={state.hobbies}
+            nationalities={state.nationalities}
+            onClearQuery={() => setDraft('')}
+            onRemoveHobby={toggleHobby}
+            onRemoveNationality={toggleNationality}
+            onClearAll={clearFilters}
+          />
+
+          <div className="text-text-muted mb-3 flex items-center gap-3 text-sm">
             <span>
-              {users.total.toLocaleString('en-US')} {users.total === 1 ? 'person' : 'people'}
+              <span className="text-text font-medium">{users.total.toLocaleString('en-US')}</span>{' '}
+              {users.total === 1 ? 'person' : 'people'}
             </span>
-            {users.isRefreshing && <span className="text-text-subtle">updating…</span>}
-            {hasFilters && (
-              <button type="button" onClick={clearFilters} className="text-accent-text underline">
-                Clear filters
-              </button>
-            )}
+            {hasFilters && <span className="text-text-subtle">matching your filters</span>}
           </div>
 
           {users.isInitialLoading && <p className="text-text-subtle text-sm">Loading…</p>}
@@ -136,30 +150,6 @@ export default function App() {
           </div>
         </section>
       </main>
-    </div>
-  );
-}
-
-function FacetPreview({
-  title,
-  values,
-}: {
-  title: string;
-  values: { value: string; count: number }[];
-}) {
-  return (
-    <div>
-      <h3 className="text-text-muted mb-1 text-xs font-semibold uppercase tracking-wide">
-        {title}
-      </h3>
-      <ul className="space-y-1">
-        {values.slice(0, 5).map((facet) => (
-          <li key={facet.value} className="text-text flex justify-between">
-            <span>{facet.value}</span>
-            <span className="text-text-subtle">{facet.count.toLocaleString('en-US')}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
