@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { normalizeQuery } from 'presight-shared';
+import { normalizeQuery, toSearchParams } from 'presight-shared';
 import { ActiveFilters } from './components/ActiveFilters';
 import { BackToTop } from './components/BackToTop';
 import { FilterDrawer } from './components/FilterDrawer';
@@ -13,6 +13,7 @@ import { UserListSkeleton } from './components/states/UserListSkeleton';
 import { useDebouncedCallback } from './hooks/useDebouncedCallback';
 import { useDirectoryFacets, useDirectoryUsers } from './hooks/useDirectoryData';
 import { useDirectoryParams } from './hooks/useDirectoryParams';
+import { useScrollToTopOnChange } from './hooks/useScrollToTopOnChange';
 import { useTheme } from './hooks/useTheme';
 
 export default function App() {
@@ -71,6 +72,11 @@ export default function App() {
 
   const users = useDirectoryUsers(state);
   const facets = useDirectoryFacets(state);
+
+  // The canonical query string changes exactly when the result set or its order
+  // does — and not when scrolling loads another page, since paging lives in the
+  // cursor rather than in the view state.
+  useScrollToTopOnChange(toSearchParams(state).toString());
 
   // Compared in canonical form too, or a trailing space would leave the search
   // spinner running forever against a query that has in fact been applied.
