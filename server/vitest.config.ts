@@ -8,8 +8,8 @@ export default defineConfig({
     // in parallel without interfering.
     isolate: true,
     // node:sqlite is still flagged experimental and announces itself on every
-    // worker. The status is recorded in DECISIONS.md rather than hidden; this
-    // only keeps it out of the test output.
+    // worker. The flag is declared here rather than hidden, and only keeps the
+    // repeated warning out of the test output.
     execArgv: ['--disable-warning=ExperimentalWarning'],
     coverage: {
       provider: 'v8',

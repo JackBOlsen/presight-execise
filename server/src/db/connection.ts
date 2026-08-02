@@ -6,12 +6,11 @@ import { config } from '../config.js';
 /**
  * SQLite access.
  *
- * Uses Node's built-in `node:sqlite` rather than `better-sqlite3`. The decision
- * is recorded in DECISIONS.md; the short version is that better-sqlite3 v13
- * publishes no prebuilt binaries, so it would require a Python and C++
- * toolchain on every machine that clones this repository — and "easy local
- * setup" is one of the things this exercise is judged on. The built-in module
- * needs no compiler, which also removes the build stage from the Docker image.
+ * Uses Node's built-in `node:sqlite` rather than `better-sqlite3`, because
+ * better-sqlite3 v13 publishes no prebuilt binaries: it would require a Python
+ * and C++ toolchain on every machine that clones this repository. The built-in
+ * module needs no compiler, which also keeps a build stage out of the Docker
+ * image. It does require Node 24, where the module is unflagged.
  *
  * The API is synchronous. That is a good fit here rather than a limitation:
  * SQLite reads from the local page cache are measured in microseconds, so the
