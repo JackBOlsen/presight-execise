@@ -1,5 +1,3 @@
-import { flagFor } from '../lib/nationality';
-
 /**
  * A summary of everything currently narrowing the results, each removable.
  *
@@ -39,7 +37,6 @@ export function ActiveFilters({
         <Chip
           key={`nationality-${value}`}
           label={value}
-          prefix={flagFor(value)}
           onRemove={() => onRemoveNationality(value)}
         />
       ))}
@@ -61,18 +58,9 @@ export function ActiveFilters({
   );
 }
 
-function Chip({
-  label,
-  prefix,
-  onRemove,
-}: {
-  label: string;
-  prefix?: string | undefined;
-  onRemove: () => void;
-}) {
+function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <span className="border-accent-border bg-accent-soft text-accent-text inline-flex items-center gap-1.5 rounded-full border py-1 pr-1 pl-2.5 text-xs font-medium">
-      {prefix && <span aria-hidden="true">{prefix}</span>}
       <span className="max-w-[12rem] truncate">{label}</span>
       <button
         type="button"

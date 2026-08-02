@@ -1,5 +1,4 @@
 import type { User } from 'presight-shared';
-import { flagFor } from '../lib/nationality';
 import { Avatar } from './Avatar';
 
 /**
@@ -51,14 +50,10 @@ export function UserCard({ user }: { user: User }) {
       </h3>
 
       <div className="col-start-2 flex items-center justify-between gap-3 leading-6">
-        <span className="text-text-muted min-w-0 truncate text-sm">
-          {flagFor(user.nationality) && (
-            <span aria-hidden="true" className="mr-1.5">
-              {flagFor(user.nationality)}
-            </span>
-          )}
-          {user.nationality}
-        </span>
+        {/* No flag emoji: Windows ships no glyphs for them, so a browser there
+            falls back to drawing the two regional-indicator letters and the
+            card reads "DE German". The name alone is unambiguous. */}
+        <span className="text-text-muted min-w-0 truncate text-sm">{user.nationality}</span>
         <span className="text-text-subtle shrink-0 text-sm" title={`${user.age} years old`}>
           {user.age}
         </span>

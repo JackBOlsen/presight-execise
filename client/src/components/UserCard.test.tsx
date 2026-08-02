@@ -72,17 +72,18 @@ describe('UserCard', () => {
     });
   });
 
-  describe('nationality flag', () => {
-    it('decorates a known nationality', () => {
-      const { container } = render(<UserCard user={buildUser({ nationality: 'Danish' })} />);
-      expect(container.textContent).toContain('🇩🇰');
+  describe('nationality', () => {
+    it('shows the name on its own', () => {
+      render(<UserCard user={buildUser({ nationality: 'German' })} />);
+      expect(screen.getByText('German')).toBeInTheDocument();
     });
 
-    it('renders an unknown nationality without one', () => {
-      // Presentation-only, so an unmapped value loses the emoji, not the person.
-      const { container } = render(<UserCard user={buildUser({ nationality: 'Atlantean' })} />);
-      expect(screen.getByText('Atlantean')).toBeInTheDocument();
+    it('renders no flag emoji', () => {
+      // Windows ships no glyphs for flag emoji, so a browser there draws the
+      // two regional-indicator letters instead and the card reads "DE German".
+      const { container } = render(<UserCard user={buildUser({ nationality: 'German' })} />);
       expect(container.textContent).not.toMatch(/\p{Regional_Indicator}/u);
+      expect(container.textContent).not.toContain('DE');
     });
   });
 

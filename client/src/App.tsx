@@ -142,7 +142,12 @@ export default function App() {
         {/* Sticky because the page itself scrolls: the filters must stay
             reachable while fifty thousand rows run past them. Hidden below the
             breakpoint, where the same content appears in the drawer. */}
-        <aside className="border-border bg-surface rounded-card hidden border p-4 lg:sticky lg:top-[4.75rem] lg:block lg:self-start">
+        {/* Sticky, so the filters stay reachable while fifty thousand rows run
+            past them — but a sticky element is pinned to the viewport, so with
+            both groups expanded to twenty values the bottom of the list would
+            sit below the fold with no way to reach it. Bounding the height and
+            scrolling inside is what makes the full top-20 usable. */}
+        <aside className="border-border bg-surface rounded-card scrollbar-slim hidden border p-4 lg:sticky lg:top-[4.75rem] lg:block lg:max-h-[calc(100dvh-6.5rem)] lg:self-start lg:overflow-y-auto">
           {sidebar}
         </aside>
 
