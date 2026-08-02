@@ -1,0 +1,51 @@
+# Runs the whole application locally with a single command:
+#
+#   docker compose up --build
+#
+# Then open http://localhost:8080. The database is created and seeded on first
+# boot, which takes a few seconds; the client waits for the API to report
+# healthy before it starts, so the first page load already has data behind it.
+
+services:
+  server:
+    build:
+      # The repository root, not server/: this is a workspace monorepo and the
+      # build needs the lockfile and the shared package alongside the server.
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_PATH: /data/users.db
+      SEED_USER_COUNT: 50000
+      # Fixed, so every machine that runs this gets an identical directory.
+      SEED_RANDOM_SEED: 42
+    volumes:
+      # Named rather than a bind mount: SQLite on a Windows or macOS bind mount
+      # goes through a shared filesystem where its locking is unreliable.
+      - sqlite-data:/data
+    ports:
+      # Published so the API can be inspected directly. The client does not use
+      # this — it reaches the server over the compose network via nginx.
+      - '3000:3000'
+    # Reaps zombie processes and forwards signals, so the graceful shutdown in
+    # index.js actually runs on `docker compose down`.
+    init: true
+    restart: unless-stopped
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    ports:
+      - '8080:80'
+    depends_on:
+      server:
+        # Waits for the healthcheck rather than just for the process to exist,
+        # so the client never comes up while the database is still seeding.
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+
+volumes:
+  sqlite-data:

@@ -1,0 +1,35 @@
+# Keep the build context small and the image layers reproducible.
+#
+# node_modules is excluded so the image installs from the lockfile rather than
+# inheriting a host tree that may hold platform-specific binaries.
+node_modules
+**/node_modules
+
+# Build output — regenerated inside the image.
+dist
+**/dist
+**/*.tsbuildinfo
+
+# The database is created by the seeder on first boot and lives on a volume.
+server/data
+**/*.db
+**/*.db-wal
+**/*.db-shm
+
+coverage
+**/coverage
+
+.git
+.github
+.yarn/cache
+.yarn/install-state.gz
+.vite
+.nx
+
+# Documentation and local tooling contribute nothing to a running container.
+*.md
+!README.md
+.idea
+.vscode
+.env
+.env.*
