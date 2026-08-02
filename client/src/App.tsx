@@ -1,21 +1,29 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { normalizeQuery, toSearchParams } from 'presight-shared';
+import { useCallback, useState } from 'react';
+import { toSearchParams } from 'presight-shared';
 import { ActiveFilters } from './components/ActiveFilters';
 import { BackToTop } from './components/BackToTop';
 import { FilterDrawer } from './components/FilterDrawer';
 import { FilterSidebar } from './components/FilterSidebar';
 import { SearchInput } from './components/SearchInput';
 import { SortControls } from './components/SortControls';
+import { ThemeToggle } from './components/ThemeToggle';
 import { UserList } from './components/UserList';
 import { EmptyState } from './components/states/EmptyState';
 import { ErrorState } from './components/states/ErrorState';
 import { UserListSkeleton } from './components/states/UserListSkeleton';
-import { useDebouncedCallback } from './hooks/useDebouncedCallback';
 import { useDirectoryFacets, useDirectoryUsers } from './hooks/useDirectoryData';
 import { useDirectoryParams } from './hooks/useDirectoryParams';
 import { useScrollToTopOnChange } from './hooks/useScrollToTopOnChange';
-import { useTheme } from './hooks/useTheme';
+import { useSearchDraft } from './hooks/useSearchDraft';
 
+/**
+ * Composes the directory: header, filters, list.
+ *
+ * Deliberately holds no logic of its own beyond which region to render. The URL
+ * state, the two queries, the search field's debounce and the theme each live in
+ * their own hook or component, so this file reads as a layout rather than as a
+ * place behaviour accumulates.
+ */
 export default function App() {
   const {
     state,
@@ -27,48 +35,11 @@ export default function App() {
     toggleNationality,
     clearFilters,
   } = useDirectoryParams();
-  const { resolved, toggle } = useTheme();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
-  /**
-   * The search box shows `draft` so typing feels instant, while the URL — the
-   * real state — is written behind a debounce.
-   *
-   * `requestedQuery` records what this field last asked the URL to hold, which
-   * is how an update we caused is told apart from one we did not. Without that
-   * distinction a pending write can fire after something else has already
-   * changed the URL and silently put the old search back.
-   */
-  const [draft, setDraft] = useState(state.q);
-  const requestedQuery = useRef(state.q);
-
-  const { run: scheduleQuery, cancel: cancelScheduledQuery } = useDebouncedCallback(setQuery, 300);
-
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setDraft(value);
-      requestedQuery.current = value;
-      scheduleQuery(value);
-    },
-    [scheduleQuery],
-  );
-
-  useEffect(() => {
-    // Our own change arriving back, compared in the URL's canonical form. The
-    // field may legitimately hold "joy " while the URL holds "joy"; treating
-    // that as somebody else's edit would snatch the trailing space away
-    // mid-word, exactly when the user is about to type a surname after it.
-    if (state.q === normalizeQuery(requestedQuery.current)) return;
-
-    // Anything else changed the search — the back button, removing a chip,
-    // clearing all filters. The URL wins, so adopt it and drop any write we had
-    // scheduled, whose stale value would otherwise undo what just happened.
-    cancelScheduledQuery();
-    requestedQuery.current = state.q;
-    setDraft(state.q);
-  }, [state.q, cancelScheduledQuery]);
+  const search = useSearchDraft(state.q, setQuery);
 
   const users = useDirectoryUsers(state);
   const facets = useDirectoryFacets(state);
@@ -78,9 +49,6 @@ export default function App() {
   // cursor rather than in the view state.
   useScrollToTopOnChange(toSearchParams(state).toString());
 
-  // Compared in canonical form too, or a trailing space would leave the search
-  // spinner running forever against a query that has in fact been applied.
-  const isTyping = normalizeQuery(draft) !== state.q;
   const activeFilterCount = state.hobbies.length + state.nationalities.length + (state.q ? 1 : 0);
 
   const sidebar = (
@@ -105,9 +73,9 @@ export default function App() {
           </h1>
 
           <SearchInput
-            value={draft}
-            onChange={handleSearchChange}
-            isSearching={isTyping || users.isRefreshing}
+            value={search.draft}
+            onChange={search.onChange}
+            isSearching={search.isTyping || users.isRefreshing}
           />
 
           <div className="ml-auto flex items-center gap-2">
@@ -118,28 +86,7 @@ export default function App() {
               onOrderToggle={toggleOrder}
             />
 
-            <button
-              type="button"
-              onClick={toggle}
-              aria-label="Toggle colour theme"
-              className="border-border bg-canvas text-text-muted hover:border-border-strong hover:text-text rounded-control border p-2 transition-colors"
-            >
-              {resolved === 'dark' ? (
-                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="h-4 w-4">
-                  <path d="M10 2a8 8 0 1 0 8 8 6.5 6.5 0 0 1-8-8Z" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="h-4 w-4">
-                  <circle cx="10" cy="10" r="3.5" fill="currentColor" />
-                  <path
-                    d="M10 2v1.5M10 16.5V18M18 10h-1.5M3.5 10H2m13.66-5.66-1.06 1.06M5.4 14.6l-1.06 1.06m11.32 0-1.06-1.06M5.4 5.4 4.34 4.34"
-                    stroke="currentColor"
-                    strokeWidth="1.75"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              )}
-            </button>
+            <ThemeToggle />
           </div>
         </div>
       </header>
