@@ -158,11 +158,24 @@ describe('service', () => {
       expect(Object.keys(facets.hobbies[0]!).sort()).toEqual(['count', 'value']);
     });
 
-    it('changes when the filters change', () => {
+    it('narrows the hobby group when a nationality is selected', () => {
       const all = getFacets(db, NO_FILTERS);
       const british = getFacets(db, { ...NO_FILTERS, nationality: ['British'] });
       expect(british.hobbies).not.toEqual(all.hobbies);
-      expect(british.nationalities).toEqual([{ value: 'British', count: 4 }]);
+    });
+
+    it('leaves the nationality group intact so a second can be chosen', () => {
+      // Nationalities combine with OR, so counting them within their own filter
+      // would leave only the selected one and strand the user.
+      const all = getFacets(db, NO_FILTERS);
+      const british = getFacets(db, { ...NO_FILTERS, nationality: ['British'] });
+      expect(british.nationalities).toEqual(all.nationalities);
+      expect(british.nationalities.map((f) => f.value)).toContain('Danish');
+    });
+
+    it('narrows the nationality group by the other filters', () => {
+      const facets = getFacets(db, { ...NO_FILTERS, q: 'ada', nationality: ['Danish'] });
+      expect(facets.nationalities).toEqual([{ value: 'British', count: 2 }]);
     });
   });
 });

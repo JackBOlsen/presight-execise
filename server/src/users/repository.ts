@@ -127,7 +127,10 @@ export function topNationalities(
   filters: DirectoryFilters,
   limit: number,
 ): FacetRow[] {
-  const filter = buildFilterPredicate(filters);
+  // Counted within the text and hobby filters, but not within the nationality
+  // filter itself — otherwise selecting one nationality removes every other from
+  // the group and a second can never be chosen. See FilterPredicateOptions.
+  const filter = buildFilterPredicate(filters, { excludeNationality: true });
   return db
     .prepare(
       `SELECT n.name AS value, COUNT(*) AS count

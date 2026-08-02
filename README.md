@@ -126,7 +126,7 @@ From the repository root:
 | ---------------- | ----------------------------------------------------- |
 | `yarn dev`       | API, client and the shared package's watcher together |
 | `yarn build`     | Build all three packages                              |
-| `yarn test`      | Full suite — 332 tests                                |
+| `yarn test`      | Full suite — 372 tests                                |
 | `yarn typecheck` | Typecheck everything, including tests                 |
 | `yarn format`    | Prettier                                              |
 
@@ -189,6 +189,14 @@ Takes the same `q`, `nationality` and `hobby` parameters — but not `sort` or
 `cursor`, since facets describe which users match, not the order they are read
 in. Returns the top 20 of each for the current result set.
 
+One asymmetry, and it is deliberate. The **hobby** counts apply the hobby
+filter, so selecting Table Tennis then shows how many of those people also
+garden — narrowing, which is what AND means. The **nationality** counts apply
+the text and hobby filters but _not_ the nationality filter. Nationalities
+combine with OR, so counting them within their own filter would leave only the
+selected one in the group and make a second impossible to pick, putting "match
+any of these nationalities" out of reach of the UI.
+
 ```json
 {
   "hobbies": [{ "value": "Table Tennis", "count": 13228 }],
@@ -243,13 +251,13 @@ readable message.
 yarn test
 ```
 
-332 tests. Server coverage is 91% overall, 98% across the query logic.
+372 tests. Server coverage is 91% overall, 98% across the query logic.
 
 | Package  |     |                                                                                 |
 | -------- | --- | ------------------------------------------------------------------------------- |
-| `server` | 156 | Filtering, sorting, pagination, facet counts, schema constraints, HTTP contract |
-| `shared` | 71  | Query-parameter parsing, URL round-tripping, response schemas                   |
-| `client` | 105 | URL state, card rendering, virtualisation, filter interactions, states          |
+| `server` | 174 | Filtering, sorting, pagination, facet counts, schema constraints, HTTP contract |
+| `shared` | 86  | Query-parameter parsing, URL round-tripping, response schemas                   |
+| `client` | 112 | URL state, card rendering, virtualisation, filter interactions, states          |
 
 Server tests run against a hand-written fixture of twelve users
 (`server/src/test/fixture.ts`), small enough that every expected count can be

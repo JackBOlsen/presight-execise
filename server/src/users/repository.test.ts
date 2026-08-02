@@ -436,12 +436,84 @@ describe('repository', () => {
       expect(facets).toEqual([{ value: 'British', count: 2 }]);
     });
 
-    it('applies a selected nationality to its own facet (spec-literal)', () => {
-      // The brief asks for counts over the current result set, so selecting a
-      // nationality leaves only that nationality in the group. The client keeps
-      // selected values visible separately so they remain removable.
-      const facets = topNationalities(db, filters({ nationality: ['Danish'] }), FACET_LIMIT);
-      expect(facets).toEqual([{ value: 'Danish', count: 2 }]);
+    describe('the nationality group excludes its own filter', () => {
+      it('keeps the other nationalities selectable', () => {
+        // Nationalities combine with OR. Counting them within their own filter
+        // would leave only the selected one in the group, so a second could
+        // never be picked and the "match any of these" requirement would be
+        // reachable only by editing the URL.
+        const facets = topNationalities(db, filters({ nationality: ['Danish'] }), FACET_LIMIT);
+        expect(facets.map((f) => f.value)).toEqual([
+          'American',
+          'British',
+          'Danish',
+          'Dutch',
+          'Finnish',
+        ]);
+      });
+
+      it('counts each nationality over the whole set, not the selection', () => {
+        const withSelection = topNationalities(
+          db,
+          filters({ nationality: ['Danish'] }),
+          FACET_LIMIT,
+        );
+        const without = topNationalities(db, filters(), FACET_LIMIT);
+        expect(withSelection).toEqual(without);
+      });
+
+      it('lets a second nationality be added', () => {
+        const facets = topNationalities(
+          db,
+          filters({ nationality: ['Danish', 'Dutch'] }),
+          FACET_LIMIT,
+        );
+        expect(facets.map((f) => f.value)).toContain('British');
+        // And the list itself does honour the OR: Danish (11, 12) plus Dutch (5).
+        expect(idsFor(filters({ nationality: ['Danish', 'Dutch'] })).sort((a, b) => a - b)).toEqual(
+          [5, 11, 12],
+        );
+      });
+
+      it('still narrows by the text and hobby filters', () => {
+        // Only its own filter is excluded; the others still apply, which is what
+        // keeps the counts describing the set being browsed.
+        expect(
+          topNationalities(db, filters({ q: 'ada', nationality: ['Danish'] }), FACET_LIMIT),
+        ).toEqual([{ value: 'British', count: 2 }]);
+
+        expect(
+          topNationalities(
+            db,
+            filters({ hobby: ['Sailing'], nationality: ['Danish'] }),
+            FACET_LIMIT,
+          ),
+        ).toEqual([
+          { value: 'American', count: 1 },
+          { value: 'Danish', count: 1 },
+        ]);
+      });
+    });
+
+    it('keeps the hobby group narrowing, since hobbies combine with AND', () => {
+      // The asymmetry is deliberate. Narrowing to Chess players and counting
+      // their other hobbies is the useful question; doing the same for an OR
+      // filter is a dead end.
+      const all = topHobbies(db, filters(), FACET_LIMIT);
+      const withChess = topHobbies(db, filters({ hobby: ['Chess'] }), FACET_LIMIT);
+      expect(withChess).not.toEqual(all);
+      expect(Object.fromEntries(withChess.map((f) => [f.value, f.count]))).toEqual({
+        Chess: 7,
+        Reading: 3,
+        Writing: 2,
+        Baking: 1,
+        Cooking: 1,
+        Hiking: 1,
+        Painting: 1,
+        Running: 2,
+        Sailing: 2,
+        Yoga: 1,
+      });
     });
 
     it('counts a facet value consistently with the result total', () => {

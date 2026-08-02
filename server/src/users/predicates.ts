@@ -60,7 +60,31 @@ export function toPrefixPattern(query: string): string {
   return `${escaped}%`;
 }
 
-export function buildFilterPredicate(filters: DirectoryFilters): SqlFragment {
+export interface FilterPredicateOptions {
+  /**
+   * Leave the nationality filter out of the clause.
+   *
+   * Used only by the nationality facet, and the reason is a conflict between
+   * two requirements. Nationalities combine with OR, so applying that filter to
+   * its own counts leaves exactly the selected nationalities in the result set —
+   * every other value drops to zero and disappears from the group, making a
+   * second nationality impossible to pick. The filter would be reachable only by
+   * editing the URL.
+   *
+   * Hobbies do not have this problem and are deliberately left alone: they
+   * combine with AND, so narrowing to Table Tennis players and then counting
+   * their other hobbies is exactly the useful question.
+   *
+   * This is the standard treatment of multi-select OR facets — Solr and
+   * Elasticsearch both provide it directly, as tag exclusion and post-filtering.
+   */
+  excludeNationality?: boolean;
+}
+
+export function buildFilterPredicate(
+  filters: DirectoryFilters,
+  options: FilterPredicateOptions = {},
+): SqlFragment {
   const clauses: string[] = [];
   const params: SqlValue[] = [];
 
@@ -103,7 +127,7 @@ export function buildFilterPredicate(filters: DirectoryFilters): SqlFragment {
     }
   }
 
-  if (filters.nationality.length > 0) {
+  if (filters.nationality.length > 0 && !options.excludeNationality) {
     // OR semantics: a user from any of the selected nationalities.
     clauses.push(
       `u.nationality_id IN (

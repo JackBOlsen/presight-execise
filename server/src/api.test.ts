@@ -103,8 +103,27 @@ describe('API', () => {
     });
 
     it('reflects the active filters', async () => {
+      const { body } = await request(app).get('/api/facets?hobby=Chess').expect(200);
+      expect(body.hobbies[0]).toEqual({ value: 'Chess', count: 7 });
+      // Chess players are American, British and Danish — not Dutch or Finnish.
+      expect(body.nationalities.map((f: { value: string }) => f.value)).not.toContain('Finnish');
+    });
+
+    it('keeps every nationality selectable after one is chosen', async () => {
+      // Otherwise "match any of these nationalities" is unreachable from the UI.
       const { body } = await request(app).get('/api/facets?nationality=British').expect(200);
-      expect(body.nationalities).toEqual([{ value: 'British', count: 4 }]);
+      const values = body.nationalities.map((f: { value: string }) => f.value);
+      expect(values).toContain('British');
+      expect(values).toContain('Danish');
+    });
+
+    it('applies both nationalities when two are selected', async () => {
+      const { body } = await request(app)
+        .get('/api/users?nationality=Danish&nationality=Dutch&limit=50')
+        .expect(200);
+      expect(
+        body.data.map((u: { id: number }) => u.id).sort((a: number, b: number) => a - b),
+      ).toEqual([5, 11, 12]);
     });
 
     it('validates its own parameters', async () => {
