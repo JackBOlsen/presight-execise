@@ -83,7 +83,7 @@ The seed is deterministic: every machine produces the same 50,000 users,
 
 | Command          |                                       |
 | ---------------- | ------------------------------------- |
-| `yarn test`      | Full suite — 378 tests                |
+| `yarn test`      | Full suite — 385 tests                |
 | `yarn build`     | Build all three packages              |
 | `yarn typecheck` | Typecheck everything, including tests |
 | `yarn format`    | Prettier                              |
@@ -128,7 +128,7 @@ The API is three endpoints under `/api`: `users` (paginated, filtered, sorted),
 
 ## Known deviations
 
-Three places where the shipped behaviour differs from a literal reading of the
+Two places where the shipped behaviour differs from a literal reading of the
 brief. Each is a decision with a stated cost.
 
 1. **The nationality facet does not apply the nationality filter to its own
@@ -142,8 +142,3 @@ brief. Each is a decision with a stated cost.
    47 of 67 hobbies and 28 of 48 nationalities undiscoverable there. They remain
    reachable by narrowing (the counts recompute per result set) and via the URL,
    which accepts any value and round-trips it.
-
-3. **A multi-part surname typed in full finds nobody.** Two or more words are
-   read positionally — given name, then family name — so "Van Dyke" looks for a
-   given name containing "Van". The parts match individually, and a single word
-   matches anywhere in either name.
