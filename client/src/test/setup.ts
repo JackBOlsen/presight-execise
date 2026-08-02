@@ -26,6 +26,14 @@ beforeEach(() => {
   document.documentElement.removeAttribute('data-theme');
   localStorage.clear();
 
+  // jsdom does not implement scrollTo, which the virtualizer calls. Stubbed so
+  // the warning does not drown out output that matters.
+  Object.defineProperty(window, 'scrollTo', {
+    writable: true,
+    configurable: true,
+    value: () => {},
+  });
+
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,

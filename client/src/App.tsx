@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SORT_FIELDS, SORT_ORDERS } from 'presight-shared';
+import { UserList } from './components/UserList';
 import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { useDirectoryFacets, useDirectoryUsers } from './hooks/useDirectoryData';
 import { useDirectoryParams } from './hooks/useDirectoryParams';
@@ -82,7 +83,9 @@ export default function App() {
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[260px_1fr]">
-        <aside className="border-border bg-surface rounded-card border p-4">
+        {/* Sticky now that the page itself scrolls: the filters must stay
+            reachable while the list runs past them. */}
+        <aside className="border-border bg-surface rounded-card border p-4 lg:sticky lg:top-[4.5rem] lg:self-start">
           <h2 className="text-text mb-3 text-sm font-semibold">Filters</h2>
           {facets.isPending && <p className="text-text-subtle text-sm">Loading facets…</p>}
           {facets.isError && <p className="text-danger-text text-sm">Could not load filters.</p>}
@@ -119,32 +122,18 @@ export default function App() {
             <p className="text-text-subtle text-sm">No people match these filters.</p>
           )}
 
-          <ul className={users.isRefreshing ? 'space-y-2 opacity-60' : 'space-y-2'}>
-            {users.users.map((user) => (
-              <li
-                key={user.id}
-                className="border-border bg-surface rounded-card flex items-center gap-3 border p-3 text-sm"
-              >
-                <span className="text-text font-medium">
-                  {user.first_name} {user.last_name}
-                </span>
-                <span className="text-text-muted">{user.nationality}</span>
-                <span className="text-text-subtle ml-auto">{user.age}</span>
-                <span className="text-text-subtle">{user.hobbies.length} hobbies</span>
-              </li>
-            ))}
-          </ul>
-
-          {users.hasNextPage && (
-            <button
-              type="button"
-              onClick={() => users.fetchNextPage()}
-              disabled={users.isFetchingNextPage}
-              className="border-border bg-surface text-text hover:bg-surface-hover rounded-control mt-4 border px-4 py-2 text-sm"
-            >
-              {users.isFetchingNextPage ? 'Loading…' : 'Load more'}
-            </button>
-          )}
+          {/* Dimmed rather than emptied while a new filter loads, so the page
+              does not collapse and reflow on every keystroke. */}
+          <div
+            className={users.isRefreshing ? 'opacity-60 transition-opacity' : 'transition-opacity'}
+          >
+            <UserList
+              users={users.users}
+              hasNextPage={users.hasNextPage}
+              isFetchingNextPage={users.isFetchingNextPage}
+              fetchNextPage={users.fetchNextPage}
+            />
+          </div>
         </section>
       </main>
     </div>

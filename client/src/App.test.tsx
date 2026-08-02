@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FacetsResponse, UsersResponse } from 'presight-shared';
 import { MemoryRouter } from 'react-router-dom';
@@ -86,8 +86,13 @@ describe('App', () => {
     stubApi();
     renderApp();
     expect(await screen.findByText('Top hobbies')).toBeInTheDocument();
-    expect(screen.getByText('Chess')).toBeInTheDocument();
-    expect(screen.getByText('12')).toBeInTheDocument();
+
+    // Scoped to the sidebar: "Chess" also appears as a hobby chip on the cards,
+    // so an unscoped query is genuinely ambiguous.
+    const sidebar = within(screen.getByRole('complementary'));
+    expect(sidebar.getByText('Chess')).toBeInTheDocument();
+    expect(sidebar.getByText('12')).toBeInTheDocument();
+    expect(sidebar.getByText('Danish')).toBeInTheDocument();
   });
 
   it('requests both endpoints with the filters from the URL', async () => {
