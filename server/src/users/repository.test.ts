@@ -84,6 +84,60 @@ describe('repository', () => {
     it('returns nothing for a query that matches nobody', () => {
       expect(idsFor(filters({ q: 'zzzz' }))).toEqual([]);
     });
+
+    describe('a full name', () => {
+      it('reads two words as given name then family name', () => {
+        // Ada Lovelace (1) and ADA Lovelace (8).
+        expect(idsFor(filters({ q: 'Ada Lovelace' })).sort((a, b) => a - b)).toEqual([1, 8]);
+        expect(idsFor(filters({ q: 'Zed Aardvark' }))).toEqual([12]);
+      });
+
+      it('accepts a partial on both halves', () => {
+        // The reason each column is matched separately rather than against a
+        // concatenated "first last" string, which needs a complete first name.
+        expect(idsFor(filters({ q: 'Al Tur' }))).toEqual([2]);
+        expect(idsFor(filters({ q: 'Ze Aar' }))).toEqual([12]);
+        expect(idsFor(filters({ q: 'Ada Love' })).sort((a, b) => a - b)).toEqual([1, 8]);
+      });
+
+      it('is case-insensitive across both words', () => {
+        expect(idsFor(filters({ q: 'aDa lOvE' })).sort((a, b) => a - b)).toEqual([1, 8]);
+      });
+
+      it('respects word order', () => {
+        // Reversing the words is a different search, not the same one. This is
+        // what lets a search exclude someone whose names are the mirror image.
+        expect(idsFor(filters({ q: 'Turing Alan' }))).toEqual([]);
+        expect(idsFor(filters({ q: 'Aardvark Zed' }))).toEqual([]);
+      });
+
+      it('does not let the second word match the first name again', () => {
+        // "Ada Ada" must not match Ada Lovelace by satisfying both words from
+        // the given name — the loose behaviour a plain token search would have.
+        expect(idsFor(filters({ q: 'Ada Ada' }))).toEqual([]);
+      });
+
+      it('requires both words to match', () => {
+        expect(idsFor(filters({ q: 'Ada Turing' }))).toEqual([]);
+        expect(idsFor(filters({ q: 'Grace Lovelace' }))).toEqual([]);
+      });
+
+      it('still escapes wildcards in either word', () => {
+        expect(idsFor(filters({ q: 'Per%y Perc' }))).toEqual([11]);
+        expect(idsFor(filters({ q: 'Per%y %' }))).toEqual([]);
+        expect(idsFor(filters({ q: '% %' }))).toEqual([]);
+      });
+
+      it('tolerates extra whitespace between the words', () => {
+        expect(idsFor(filters({ q: 'Alan   Turing' }))).toEqual([2]);
+      });
+
+      it('treats everything after the first word as the family name', () => {
+        // Nobody in the fixture has a two-part surname, so this finds nobody —
+        // but it must not silently fall back to matching on the first word.
+        expect(idsFor(filters({ q: 'Alan Turing Extra' }))).toEqual([]);
+      });
+    });
   });
 
   describe('nationality filter (OR)', () => {

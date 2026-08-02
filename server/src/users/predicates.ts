@@ -64,14 +64,43 @@ export function buildFilterPredicate(filters: DirectoryFilters): SqlFragment {
   const clauses: string[] = [];
   const params: SqlValue[] = [];
 
-  if (filters.q.length > 0) {
-    // Matches when either name part starts with the query. SQLite satisfies this
-    // with a multi-index OR: one range seek per name index, then a union.
-    clauses.push(
-      `(u.first_name LIKE ? ESCAPE '${LIKE_ESCAPE}' OR u.last_name LIKE ? ESCAPE '${LIKE_ESCAPE}')`,
-    );
-    const pattern = toPrefixPattern(filters.q);
-    params.push(pattern, pattern);
+  /**
+   * Text filter.
+   *
+   * One word matches either name part, so searching a surname alone works. Two
+   * or more words are read positionally — the first word is the given name and
+   * the rest the family name — which is how someone typing a full name expects
+   * it to be understood.
+   *
+   * Both halves may be partial: "Pet Jac" finds Peter Jacob. That is the reason
+   * the columns are matched separately rather than against a concatenated
+   * "first last" string, which looks equivalent but requires the first word to
+   * be a *complete* given name for the space to line up.
+   *
+   * The consequence accepted is that word order matters: "Jacob Peter" and
+   * "Peter Jacob" are different searches. Ignoring order would mean a search for
+   * one of them always returned the other, since they are mirror images.
+   */
+  const tokens = filters.q.split(/\s+/).filter((token) => token.length > 0);
+  const [givenName, ...familyNameParts] = tokens;
+
+  if (givenName !== undefined) {
+    if (familyNameParts.length === 0) {
+      // SQLite satisfies this with a multi-index OR: one range seek per name
+      // index, then a union.
+      clauses.push(
+        `(u.first_name LIKE ? ESCAPE '${LIKE_ESCAPE}' OR u.last_name LIKE ? ESCAPE '${LIKE_ESCAPE}')`,
+      );
+      const pattern = toPrefixPattern(givenName);
+      params.push(pattern, pattern);
+    } else {
+      // Everything after the first word is treated as the family name, so a
+      // double-barrelled surname survives being typed out in full.
+      clauses.push(
+        `(u.first_name LIKE ? ESCAPE '${LIKE_ESCAPE}' AND u.last_name LIKE ? ESCAPE '${LIKE_ESCAPE}')`,
+      );
+      params.push(toPrefixPattern(givenName), toPrefixPattern(familyNameParts.join(' ')));
+    }
   }
 
   if (filters.nationality.length > 0) {

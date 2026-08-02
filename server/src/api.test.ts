@@ -84,6 +84,15 @@ describe('API', () => {
       const { body } = await request(app).get('/api/users?q=%25').expect(200);
       expect(body.total).toBe(0);
     });
+
+    it('searches a full name typed into the box', async () => {
+      // The space survives URL encoding and reaches the filter as two words.
+      const { body } = await request(app).get('/api/users?q=Alan%20Turing').expect(200);
+      expect(body.data.map((u: { id: number }) => u.id)).toEqual([2]);
+
+      const plus = await request(app).get('/api/users?q=Alan+Turing').expect(200);
+      expect(plus.body.total).toBe(1);
+    });
   });
 
   describe('GET /api/facets', () => {

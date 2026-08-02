@@ -147,15 +147,15 @@ Base URL `/api`. All parameters optional.
 
 ### `GET /api/users`
 
-| Parameter     |                                                          |
-| ------------- | -------------------------------------------------------- |
-| `q`           | Prefix match on first **or** last name, case-insensitive |
-| `nationality` | Repeatable. Multiple values match **any** of them        |
-| `hobby`       | Repeatable. Multiple values match **all** of them        |
-| `sort`        | `first_name` \| `last_name` \| `age` \| `nationality`    |
-| `order`       | `asc` \| `desc`                                          |
-| `limit`       | 1–100, default 30                                        |
-| `cursor`      | Opaque, from a previous response's `pageInfo.nextCursor` |
+| Parameter     |                                                                                                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `q`           | One word: prefix match on first **or** last name. Two or more: first word is the given name, the rest the family name. Case-insensitive, and either half may be partial |
+| `nationality` | Repeatable. Multiple values match **any** of them                                                                                                                       |
+| `hobby`       | Repeatable. Multiple values match **all** of them                                                                                                                       |
+| `sort`        | `first_name` \| `last_name` \| `age` \| `nationality`                                                                                                                   |
+| `order`       | `asc` \| `desc`                                                                                                                                                         |
+| `limit`       | 1–100, default 30                                                                                                                                                       |
+| `cursor`      | Opaque, from a previous response's `pageInfo.nextCursor`                                                                                                                |
 
 ```json
 {
