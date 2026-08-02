@@ -1,0 +1,173 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+/**
+ * Design tokens.
+ *
+ * Two layers on purpose. The raw palette lives in `:root` and is overridden
+ * wholesale for dark mode; `@theme inline` then maps those variables to Tailwind
+ * utilities. Because the mapping is `inline`, `bg-surface` compiles to
+ * `var(--surface)` rather than to a resolved colour, so a single attribute on
+ * <html> re-themes the entire application without a `dark:` variant on every
+ * element.
+ *
+ * Components therefore reference intent — surface, border, muted text — not
+ * specific colours, which is what keeps the two themes from drifting apart.
+ */
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  color-scheme: light;
+
+  --canvas: oklch(97.5% 0.003 264);
+  --surface: oklch(100% 0 0);
+  --surface-raised: oklch(100% 0 0);
+  --surface-hover: oklch(96.5% 0.004 264);
+
+  --border: oklch(92% 0.005 264);
+  --border-strong: oklch(86% 0.008 264);
+
+  --text: oklch(21% 0.012 264);
+  --text-muted: oklch(50% 0.014 264);
+  --text-subtle: oklch(63% 0.012 264);
+
+  --accent: oklch(52% 0.19 274);
+  --accent-hover: oklch(46% 0.19 274);
+  --accent-soft: oklch(95.5% 0.025 274);
+  --accent-border: oklch(85% 0.07 274);
+  --accent-text: oklch(44% 0.18 274);
+  --accent-contrast: oklch(100% 0 0);
+
+  --danger: oklch(55% 0.2 25);
+  --danger-soft: oklch(96% 0.03 25);
+  --danger-text: oklch(48% 0.19 25);
+
+  --shadow-card: 0 1px 2px oklch(21% 0.012 264 / 0.05);
+  --shadow-raised: 0 4px 16px oklch(21% 0.012 264 / 0.08);
+  --shadow-overlay: 0 16px 48px oklch(21% 0.012 264 / 0.18);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --canvas: oklch(16.5% 0.008 264);
+  --surface: oklch(20.5% 0.009 264);
+  --surface-raised: oklch(24% 0.011 264);
+  --surface-hover: oklch(26% 0.012 264);
+
+  --border: oklch(29% 0.011 264);
+  --border-strong: oklch(38% 0.014 264);
+
+  --text: oklch(96% 0.004 264);
+  --text-muted: oklch(72% 0.012 264);
+  --text-subtle: oklch(59% 0.013 264);
+
+  --accent: oklch(66% 0.16 274);
+  --accent-hover: oklch(73% 0.16 274);
+  --accent-soft: oklch(30% 0.06 274);
+  --accent-border: oklch(42% 0.1 274);
+  --accent-text: oklch(80% 0.12 274);
+  --accent-contrast: oklch(16% 0.01 264);
+
+  --danger: oklch(70% 0.17 25);
+  --danger-soft: oklch(28% 0.07 25);
+  --danger-text: oklch(78% 0.13 25);
+
+  --shadow-card: 0 1px 2px oklch(0% 0 0 / 0.3);
+  --shadow-raised: 0 4px 16px oklch(0% 0 0 / 0.4);
+  --shadow-overlay: 0 16px 48px oklch(0% 0 0 / 0.55);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-accent-text: var(--accent-text);
+  --color-accent-contrast: var(--accent-contrast);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
+}
+
+@layer base {
+  html {
+    /* Every count and age uses tabular figures so numbers do not jitter in
+       width as they change — the facet counts update on every filter. */
+    font-variant-numeric: tabular-nums;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-text font-sans antialiased;
+  }
+
+  /* A visible focus ring for keyboard users only, on every interactive element. */
+  :focus-visible {
+    @apply outline-accent outline-2 outline-offset-2;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+}
+
+@layer utilities {
+  /* A thin scrollbar that belongs to the theme rather than the OS. */
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/**
+ * Respect a user's request for reduced motion. Animation here is decorative —
+ * hover lifts, chip transitions — so removing it costs nothing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
