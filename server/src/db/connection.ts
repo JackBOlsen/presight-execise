@@ -20,6 +20,9 @@ import { config } from '../config.js';
  */
 export type Database = DatabaseSync;
 
+/** The value types SQLite accepts as a bound statement parameter. */
+export type SqlValue = null | number | bigint | string | Uint8Array;
+
 const IN_MEMORY = ':memory:';
 
 /**
