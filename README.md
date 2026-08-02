@@ -31,15 +31,20 @@ remember. The API runs on port 3000; the client proxies `/api` to it.
 docker compose up --build
 ```
 
-Open **http://localhost:8080**. The database is seeded on first boot and stored
-in a named volume, so it survives restarts. The client waits for the API's
-healthcheck before starting, so the first page load already has data behind it.
+Open **http://localhost:8080**.
 
-> ⚠️ The Docker setup is **written but not yet executed** — the machine it was
-> developed on could not start Docker Desktop (Windows 11 Home has no Hyper-V
-> option and WSL was not installed). The Compose file validates and its service
-> graph resolves, but the images have never been built. Everything else in this
-> README has been run and verified.
+The database is seeded on first boot and kept in a named volume, so it survives
+restarts — a second `up` reuses it rather than rebuilding. The client waits on
+the API's healthcheck before starting, so the first page load already has data
+behind it.
+
+First boot takes about **15 seconds**: seeding writes 50,000 users and ~250,000
+hobby links, which is slower inside a container on Windows and macOS than the
+two seconds it takes natively. Subsequent starts are immediate.
+
+The API is also published on port 3000 if you want to inspect it directly, but
+the browser does not use it — nginx proxies `/api` to the server over the
+Compose network.
 
 ---
 
@@ -275,7 +280,6 @@ Worth knowing what is actually asserted:
 
 ## Known limitations
 
-- **The Docker setup has not been executed** (see above).
 - **Not visually reviewed at every breakpoint.** The environment had no browser,
   so responsive behaviour is reasoned about and covered by component tests rather
   than seen. Worth a look at 375px before judging the layout.
