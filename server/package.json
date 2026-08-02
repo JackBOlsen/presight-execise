@@ -4,7 +4,8 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
-    "express": "~5.1.0"
+    "express": "~5.1.0",
+    "presight-shared": "workspace:^"
   },
   "devDependencies": {
     "@types/express": "~5.0.1",

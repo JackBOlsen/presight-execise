@@ -1,0 +1,19 @@
+# Normalise line endings to LF in the repository.
+#
+# This is not cosmetic: the Docker images are Linux, and a shell script or
+# entrypoint checked out with CRLF fails there with an opaque
+# "bad interpreter: no such file or directory".
+* text=auto eol=lf
+
+*.sql   text eol=lf
+*.sh    text eol=lf
+*.db    binary
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+
+# Collapsed in GitHub's UI, but still diffable locally — dependency changes
+# are exactly what a reviewer should be able to read.
+yarn.lock linguist-generated

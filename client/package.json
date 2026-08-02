@@ -4,6 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
+    "presight-shared": "workspace:^",
     "react": "~19.1.0",
     "react-dom": "~19.1.0",
     "react-router": "~7.5.0",
