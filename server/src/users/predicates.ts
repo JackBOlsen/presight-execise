@@ -45,19 +45,27 @@ function placeholders(count: number): string {
 }
 
 /**
- * Turn user input into a prefix pattern with LIKE's wildcards neutralised.
+ * Turn user input into a substring pattern with LIKE's wildcards neutralised.
  *
- * Without this, a query of `%` matches every user and `_` matches any single
- * character — the user's text would be silently interpreted as a pattern
+ * Without the escaping, a query of `%` matches every user and `_` matches any
+ * single character — the user's text would be silently interpreted as a pattern
  * language. Escaping keeps a search for "100%" a search for the literal
  * characters.
  *
- * The ESCAPE clause does not cost us the index: SQLite still reduces this to a
- * range scan over the NOCASE index, which EXPLAIN QUERY PLAN confirms.
+ * Matching anywhere in the name rather than only at the start is a deliberate
+ * reversal of the original design, and it costs the index. A leading `%` cannot
+ * be reduced to a range scan, so every text search is now a scan of the two name
+ * columns. That was measured before being accepted: the scan itself is ~15ms
+ * over 50,000 rows, far below the 300ms the client debounces by, and the
+ * alternative was a search where typing "son" finds Sonia but not Johnson,
+ * Wilson or Anderson — 57 of the 2,367 people whose name actually contains it.
+ *
+ * The cost did not fall where it was expected, which is the reason the facet
+ * aggregates in `repository.ts` are shaped the way they are. See the note there.
  */
-export function toPrefixPattern(query: string): string {
+export function toSearchPattern(query: string): string {
   const escaped = query.replace(/[\\%_]/g, (char) => `${LIKE_ESCAPE}${char}`);
-  return `${escaped}%`;
+  return `%${escaped}%`;
 }
 
 export interface FilterPredicateOptions {
@@ -91,31 +99,33 @@ export function buildFilterPredicate(
   /**
    * Text filter.
    *
-   * One word matches either name part, so searching a surname alone works. Two
-   * or more words are read positionally — the first word is the given name and
-   * the rest the family name — which is how someone typing a full name expects
-   * it to be understood.
+   * One word matches either name part anywhere within it, so both a surname
+   * typed alone and a fragment from the middle of one will find someone. Two or
+   * more words are read positionally — the first word is the given name and the
+   * rest the family name — which is how someone typing a full name expects it to
+   * be understood.
    *
    * Both halves may be partial: "Pet Jac" finds Peter Jacob. That is the reason
    * the columns are matched separately rather than against a concatenated
    * "first last" string, which looks equivalent but requires the first word to
    * be a *complete* given name for the space to line up.
    *
-   * The consequence accepted is that word order matters: "Jacob Peter" and
-   * "Peter Jacob" are different searches. Ignoring order would mean a search for
-   * one of them always returned the other, since they are mirror images.
+   * Two consequences accepted. Word order matters: "Jacob Peter" and "Peter
+   * Jacob" are different searches, and ignoring order would mean a search for
+   * one always returned the other, since they are mirror images. And a
+   * multi-part surname typed in full — "Van Dyke" — is read as a given name plus
+   * a family name and finds nobody; the surname's parts still match
+   * individually.
    */
   const tokens = filters.q.split(/\s+/).filter((token) => token.length > 0);
   const [givenName, ...familyNameParts] = tokens;
 
   if (givenName !== undefined) {
     if (familyNameParts.length === 0) {
-      // SQLite satisfies this with a multi-index OR: one range seek per name
-      // index, then a union.
       clauses.push(
         `(u.first_name LIKE ? ESCAPE '${LIKE_ESCAPE}' OR u.last_name LIKE ? ESCAPE '${LIKE_ESCAPE}')`,
       );
-      const pattern = toPrefixPattern(givenName);
+      const pattern = toSearchPattern(givenName);
       params.push(pattern, pattern);
     } else {
       // Everything after the first word is treated as the family name, so a
@@ -123,7 +133,7 @@ export function buildFilterPredicate(
       clauses.push(
         `(u.first_name LIKE ? ESCAPE '${LIKE_ESCAPE}' AND u.last_name LIKE ? ESCAPE '${LIKE_ESCAPE}')`,
       );
-      params.push(toPrefixPattern(givenName), toPrefixPattern(familyNameParts.join(' ')));
+      params.push(toSearchPattern(givenName), toSearchPattern(familyNameParts.join(' ')));
     }
   }
 

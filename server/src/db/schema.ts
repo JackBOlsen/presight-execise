@@ -74,13 +74,21 @@ CREATE INDEX IF NOT EXISTS idx_users_first_name   ON users(first_name, id);
 CREATE INDEX IF NOT EXISTS idx_users_age          ON users(age, id);
 CREATE INDEX IF NOT EXISTS idx_users_nationality  ON users(nationality_id, id);
 
--- Search indexes, separate from the sort indexes above because they carry a
--- different collation. The text filter is a case-insensitive prefix match, and
--- SQLite will only reduce LIKE to an index range scan when the column is
--- indexed with NOCASE. (The pattern must also be bound whole from JavaScript —
--- building it in SQL with \`? || '%'\` defeats this and forces a full scan.)
-CREATE INDEX IF NOT EXISTS idx_users_first_name_search ON users(first_name COLLATE NOCASE);
-CREATE INDEX IF NOT EXISTS idx_users_last_name_search  ON users(last_name  COLLATE NOCASE);
+-- There are deliberately no indexes for the text filter.
+--
+-- There used to be two, carrying COLLATE NOCASE, because SQLite will only reduce
+-- LIKE to an index range scan when the column is indexed that way. That
+-- optimisation requires the pattern to be anchored at the start, and the filter
+-- now matches anywhere in a name — a leading '%' cannot be a range scan under
+-- any collation, so the indexes were dead weight: EXPLAIN QUERY PLAN shows no
+-- query referencing them. They are dropped rather than left in place, since an
+-- unused index still costs write time on every insert and space in the file.
+--
+-- Case-insensitivity is unaffected. SQLite's built-in LIKE ignores case for
+-- ASCII regardless of column collation; NOCASE was only ever about the index.
+--
+-- The replacement for the lost index is not another index but the shape of the
+-- aggregate queries — see the notes in repository.ts.
 
 -- The junction table's primary key already covers "which hobbies does this user
 -- have". This is the other direction — "which users have this hobby" — used by

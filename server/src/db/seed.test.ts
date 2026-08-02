@@ -151,8 +151,6 @@ describe('seedDatabase', () => {
       'idx_users_first_name',
       'idx_users_age',
       'idx_users_nationality',
-      'idx_users_first_name_search',
-      'idx_users_last_name_search',
       'idx_user_hobbies_hobby',
     ]) {
       expect(indexes).toContain(expected);

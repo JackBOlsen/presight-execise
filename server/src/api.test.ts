@@ -81,8 +81,12 @@ describe('API', () => {
     });
 
     it('escapes a literal wildcard in the text filter', async () => {
+      // Per%y is the one name containing a literal %. Unescaped, the pattern
+      // would be "%%%" and match the whole fixture, so a total of one is what
+      // distinguishes "escaped correctly" from "matched everything".
       const { body } = await request(app).get('/api/users?q=%25').expect(200);
-      expect(body.total).toBe(0);
+      expect(body.total).toBe(1);
+      expect(body.data.map((u: { id: number }) => u.id)).toEqual([11]);
     });
 
     it('searches a full name typed into the box', async () => {

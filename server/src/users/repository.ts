@@ -131,17 +131,46 @@ export function topNationalities(
   // filter itself — otherwise selecting one nationality removes every other from
   // the group and a second can never be chosen. See FilterPredicateOptions.
   const filter = buildFilterPredicate(filters, { excludeNationality: true });
-  return db
-    .prepare(
-      `SELECT n.name AS value, COUNT(*) AS count
+
+  // Two shapes, for the same reason `topHobbies` has two: which one wins depends
+  // on whether the filter reads columns outside the index.
+  //
+  // With no filter, driving the join from `nationalities` is ideal — SQLite
+  // walks the 48 lookup rows and satisfies each from the covering
+  // (nationality_id, id) index without ever touching `users`. 3ms.
+  //
+  // Add a text filter and that same plan becomes the worst one available: the
+  // LIKE has to read `first_name` and `last_name`, so each of the 50,000 index
+  // entries turns into a random primary-key lookup into `users`. Measured at
+  // 193ms, and — the giveaway — 193ms even for a query matching nobody, because
+  // the cost is the lookups rather than the matches.
+  //
+  // Materialising the filtered rows first replaces those lookups with one
+  // sequential scan, then groups what survives. 193ms → 34ms on the broadest
+  // query, 195ms → 15ms when nothing matches. Identical results either way,
+  // which a test pins.
+  const sql = filter.isEmpty
+    ? `SELECT n.name AS value, COUNT(*) AS count
          FROM users u
          JOIN nationalities n ON n.id = u.nationality_id
         WHERE ${filter.sql}
         GROUP BY n.id, n.name
         ORDER BY count DESC, value ASC
-        LIMIT ?`,
-    )
-    .all(...filter.params, limit) as unknown as FacetRow[];
+        LIMIT ?`
+    : `WITH matched AS MATERIALIZED (
+         SELECT u.nationality_id AS nationality_id FROM users u WHERE ${filter.sql}
+       )
+       SELECT n.name AS value, c.count AS count
+         FROM (
+           SELECT nationality_id AS nid, COUNT(*) AS count
+             FROM matched
+            GROUP BY nationality_id
+         ) c
+         JOIN nationalities n ON n.id = c.nid
+        ORDER BY c.count DESC, n.name ASC
+        LIMIT ?`;
+
+  return db.prepare(sql).all(...filter.params, limit) as unknown as FacetRow[];
 }
 
 export function topHobbies(db: Database, filters: DirectoryFilters, limit: number): FacetRow[] {
@@ -160,13 +189,22 @@ export function topHobbies(db: Database, filters: DirectoryFilters, limit: numbe
         GROUP BY uh.hobby_id
         ORDER BY count DESC, value ASC
         LIMIT ?`
-    : `SELECT h.name AS value, COUNT(*) AS count
-         FROM users u
-         JOIN user_hobbies uh ON uh.user_id = u.id
-         JOIN hobbies h ON h.id = uh.hobby_id
-        WHERE ${filter.sql}
-        GROUP BY h.id, h.name
-        ORDER BY count DESC, value ASC
+    : // The filtered path aggregates the junction table against a *set* of
+      // matching user ids rather than joining every junction row to `users` and
+      // testing the predicate there. The join form re-evaluates the filter once
+      // per hobby link — up to 250,000 times, against a text filter that now
+      // scans two columns. Resolving the user set once and probing it instead
+      // takes the broadest search from 544ms to 101ms, and the unfiltered-but-
+      // still-joined case from 555ms to 119ms, for byte-identical results.
+      `SELECT h.name AS value, c.count AS count
+         FROM (
+           SELECT uh.hobby_id AS hid, COUNT(*) AS count
+             FROM user_hobbies uh
+            WHERE uh.user_id IN (SELECT u.id FROM users u WHERE ${filter.sql})
+            GROUP BY uh.hobby_id
+         ) c
+         JOIN hobbies h ON h.id = c.hid
+        ORDER BY c.count DESC, h.name ASC
         LIMIT ?`;
 
   return db.prepare(sql).all(...filter.params, limit) as unknown as FacetRow[];

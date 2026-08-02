@@ -126,7 +126,7 @@ From the repository root:
 | ---------------- | ----------------------------------------------------- |
 | `yarn dev`       | API, client and the shared package's watcher together |
 | `yarn build`     | Build all three packages                              |
-| `yarn test`      | Full suite — 372 tests                                |
+| `yarn test`      | Full suite — 374 tests                                |
 | `yarn typecheck` | Typecheck everything, including tests                 |
 | `yarn format`    | Prettier                                              |
 
@@ -147,15 +147,15 @@ Base URL `/api`. All parameters optional.
 
 ### `GET /api/users`
 
-| Parameter     |                                                                                                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `q`           | One word: prefix match on first **or** last name. Two or more: first word is the given name, the rest the family name. Case-insensitive, and either half may be partial |
-| `nationality` | Repeatable. Multiple values match **any** of them                                                                                                                       |
-| `hobby`       | Repeatable. Multiple values match **all** of them                                                                                                                       |
-| `sort`        | `first_name` \| `last_name` \| `age` \| `nationality`                                                                                                                   |
-| `order`       | `asc` \| `desc`                                                                                                                                                         |
-| `limit`       | 1–100, default 30                                                                                                                                                       |
-| `cursor`      | Opaque, from a previous response's `pageInfo.nextCursor`                                                                                                                |
+| Parameter     |                                                                                                                                                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `q`           | One word: matches **anywhere** in the first **or** last name, so `son` finds Johnson and Anderson as well as Sonia. Two or more: first word is the given name, the rest the family name. Case-insensitive, and either half may be partial |
+| `nationality` | Repeatable. Multiple values match **any** of them                                                                                                                                                                                         |
+| `hobby`       | Repeatable. Multiple values match **all** of them                                                                                                                                                                                         |
+| `sort`        | `first_name` \| `last_name` \| `age` \| `nationality`                                                                                                                                                                                     |
+| `order`       | `asc` \| `desc`                                                                                                                                                                                                                           |
+| `limit`       | 1–100, default 30                                                                                                                                                                                                                         |
+| `cursor`      | Opaque, from a previous response's `pageInfo.nextCursor`                                                                                                                                                                                  |
 
 ```json
 {
@@ -179,6 +179,25 @@ Base URL `/api`. All parameters optional.
 keyset rather than offset: the cursor encodes the last row's sort value and id,
 so paging cannot duplicate or skip rows. It is bound to the sort it was issued
 for and rejected if reused after the sort changes.
+
+**On the text filter matching anywhere.** A leading `%` cannot use an index, so
+this is a scan of the two name columns — roughly 15ms over 50,000 rows, well
+inside the 300ms the client debounces by. The scan itself was never the
+expensive part; the two facet aggregates were, because the plans that suited an
+anchored match became the worst available once the filter had to read name
+columns. Both were reshaped to aggregate over a materialised set of matching
+rows, and a request that matches nobody skips the ordered page query entirely
+once the count returns zero. Measured end to end:
+
+| `q`      | `/api/users` | `/api/facets` |
+| -------- | ------------ | ------------- |
+| _(none)_ | 91ms         | 85ms          |
+| `a`      | 74ms         | 186ms         |
+| `son`    | 79ms         | 97ms          |
+| `zzzz`   | 81ms         | 88ms          |
+
+Before the reshaping the same substring filter cost 543ms on `/api/facets?q=a`
+and 294ms on `/api/users?q=zzzz`.
 
 Multi-value filters are repeated rather than comma-joined
 (`?hobby=Chess&hobby=Yoga`), so a value containing a comma stays intact.
@@ -251,11 +270,11 @@ readable message.
 yarn test
 ```
 
-372 tests. Server coverage is 91% overall, 98% across the query logic.
+374 tests. Server coverage is 91% overall, 98% across the query logic.
 
 | Package  |     |                                                                                 |
 | -------- | --- | ------------------------------------------------------------------------------- |
-| `server` | 174 | Filtering, sorting, pagination, facet counts, schema constraints, HTTP contract |
+| `server` | 176 | Filtering, sorting, pagination, facet counts, schema constraints, HTTP contract |
 | `shared` | 86  | Query-parameter parsing, URL round-tripping, response schemas                   |
 | `client` | 112 | URL state, card rendering, virtualisation, filter interactions, states          |
 

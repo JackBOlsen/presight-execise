@@ -47,30 +47,40 @@ describe('repository', () => {
     listUsers(db, { filters: f, sort, order, limit: 100 }).rows.map((row) => row.id);
 
   describe('text filter', () => {
-    it('matches a first-name prefix, ignoring case', () => {
+    it('matches a first name, ignoring case', () => {
       expect(idsFor(filters({ q: 'ada' })).sort()).toEqual([1, 8]);
       expect(idsFor(filters({ q: 'ADA' })).sort()).toEqual([1, 8]);
       expect(idsFor(filters({ q: 'AdA' })).sort()).toEqual([1, 8]);
     });
 
-    it('matches a last-name prefix too', () => {
+    it('matches a last name too', () => {
       // Zed Aardvark matches on surname alone.
       expect(idsFor(filters({ q: 'aard' }))).toEqual([12]);
     });
 
-    it('searches both name parts at once', () => {
-      // First names Ada, Alan, Alonzo, ADA plus the surname Aardvark.
-      expect(idsFor(filters({ q: 'a' })).sort((a, b) => a - b)).toEqual([1, 2, 4, 8, 12]);
+    it('matches anywhere in a name, not only at the start', () => {
+      // The whole point of the substring filter. "ing" appears in the middle of
+      // Turing; anchoring at the start would find nobody, which is exactly how
+      // a search for "son" used to miss every Johnson and Anderson.
+      expect(idsFor(filters({ q: 'ing' }))).toEqual([2]);
+      expect(idsFor(filters({ q: 'opp' }))).toEqual([3]);
+      // The tail of a surname, which a prefix match can never reach.
+      expect(idsFor(filters({ q: 'vark' }))).toEqual([12]);
     });
 
-    it('anchors at the start rather than matching anywhere', () => {
-      // "ing" appears inside Turing but must not match it.
-      expect(idsFor(filters({ q: 'ing' }))).toEqual([]);
+    it('searches both name parts at once', () => {
+      // Everyone with an "a" anywhere in either name — which is everybody
+      // except Tim Berners.
+      expect(idsFor(filters({ q: 'a' })).sort((a, b) => a - b)).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12,
+      ]);
     });
 
     it('treats % as a literal character, not a wildcard', () => {
-      // Without escaping this would match every user in the table.
-      expect(idsFor(filters({ q: '%' }))).toEqual([]);
+      // Per%y is the only name containing a literal %. Without escaping, the
+      // pattern would collapse to "%%%" and match all twelve users, so the
+      // single result is what proves the ESCAPE clause is doing its job.
+      expect(idsFor(filters({ q: '%' }))).toEqual([11]);
       expect(idsFor(filters({ q: 'Per%' }))).toEqual([11]);
       expect(idsFor(filters({ q: 'Per%y' }))).toEqual([11]);
     });
@@ -197,16 +207,19 @@ describe('repository', () => {
 
   describe('filters combine', () => {
     it('applies text, hobby and nationality together', () => {
-      // q=a gives 1, 2, 4, 8, 12; of those Chess leaves 1, 2, 12.
-      expect(idsFor(filters({ q: 'a', hobby: ['Chess'] })).sort((a, b) => a - b)).toEqual([
-        1, 2, 12,
+      // An "e" anywhere in either name gives 1, 3, 5, 8, 9, 11, 12. Chess is
+      // held by 1, 2, 3, 5, 7, 11, 12 — so the two together leave 1, 3, 5, 11,
+      // 12, with the text filter genuinely excluding two Chess players rather
+      // than being satisfied by everybody the hobby already matched.
+      expect(idsFor(filters({ q: 'e', hobby: ['Chess'] })).sort((a, b) => a - b)).toEqual([
+        1, 3, 5, 11, 12,
       ]);
-      // Adding British leaves 1 and 2.
+      // British is 1, 2, 8, 9, so all three together leave only Ada Lovelace.
       expect(
-        idsFor(filters({ q: 'a', hobby: ['Chess'], nationality: ['British'] })).sort(
+        idsFor(filters({ q: 'e', hobby: ['Chess'], nationality: ['British'] })).sort(
           (a, b) => a - b,
         ),
-      ).toEqual([1, 2]);
+      ).toEqual([1]);
     });
 
     it('yields nothing when the combination is unsatisfiable', () => {
@@ -534,6 +547,44 @@ describe('repository', () => {
         FACET_LIMIT,
       );
       expect(viaJoin).toEqual(viaFastPath);
+    });
+
+    /**
+     * Both facet queries take a second shape once a filter is active — the
+     * counts are aggregated over a materialised set of matching rows rather than
+     * by joining and testing the predicate per row. That is worth 6x and 5x
+     * respectively now that the text filter scans, but it is a different query
+     * producing a number nobody can eyeball, so both are pinned to counts
+     * derived by hand from the fixture table.
+     *
+     * `q: 'a'` is chosen because it matches everyone except Tim Berners — a
+     * single, traceable omission. He is the fixture's only other Runner, so
+     * Running dropping from 4 to 3 is the assertion that proves the filter
+     * reached the aggregate at all.
+     */
+    it('counts nationalities correctly on the filtered (materialised) path', () => {
+      expect(topNationalities(db, filters({ q: 'a' }), FACET_LIMIT)).toEqual([
+        { value: 'American', count: 4 },
+        { value: 'British', count: 3 },
+        { value: 'Danish', count: 2 },
+        { value: 'Dutch', count: 1 },
+        { value: 'Finnish', count: 1 },
+      ]);
+    });
+
+    it('counts hobbies correctly on the filtered path', () => {
+      expect(topHobbies(db, filters({ q: 'a' }), FACET_LIMIT)).toEqual([
+        { value: 'Chess', count: 7 },
+        { value: 'Reading', count: 5 },
+        { value: 'Running', count: 3 },
+        { value: 'Writing', count: 3 },
+        { value: 'Sailing', count: 2 },
+        { value: 'Baking', count: 1 },
+        { value: 'Cooking', count: 1 },
+        { value: 'Hiking', count: 1 },
+        { value: 'Painting', count: 1 },
+        { value: 'Yoga', count: 1 },
+      ]);
     });
 
     it('returns empty groups when nothing matches', () => {
