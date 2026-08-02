@@ -5,5 +5,8 @@
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests are typechecked via tsconfig.test.json but must not reach dist —
+  // the production image has no test runner to load them with.
+  "exclude": ["src/**/*.test.ts", "src/test/**"]
 }

@@ -11,7 +11,10 @@
     "start": "node --disable-warning=ExperimentalWarning dist/index.js",
     "seed": "tsx --disable-warning=ExperimentalWarning src/db/seed.ts",
     "seed:reset": "yarn seed --force",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@faker-js/faker": "~10.1.0",
@@ -22,7 +25,11 @@
   "devDependencies": {
     "@types/express": "~5.0.1",
     "@types/node": "~24.10.1",
+    "@types/supertest": "~7.2.1",
+    "@vitest/coverage-v8": "~4.1.10",
+    "supertest": "~7.2.2",
     "tsx": "~4.20.6",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "~4.1.10"
   }
 }
