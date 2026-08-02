@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActiveFilters } from './components/ActiveFilters';
 import { BackToTop } from './components/BackToTop';
 import { FilterDrawer } from './components/FilterDrawer';
@@ -9,7 +9,7 @@ import { UserList } from './components/UserList';
 import { EmptyState } from './components/states/EmptyState';
 import { ErrorState } from './components/states/ErrorState';
 import { UserListSkeleton } from './components/states/UserListSkeleton';
-import { useDebouncedValue } from './hooks/useDebouncedValue';
+import { useDebouncedCallback } from './hooks/useDebouncedCallback';
 import { useDirectoryFacets, useDirectoryUsers } from './hooks/useDirectoryData';
 import { useDirectoryParams } from './hooks/useDirectoryParams';
 import { useTheme } from './hooks/useTheme';
@@ -30,19 +30,40 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
-  // The field updates instantly; only the resulting query waits.
+  /**
+   * The search box shows `draft` so typing feels instant, while the URL — the
+   * real state — is written behind a debounce.
+   *
+   * `requestedQuery` records what this field last asked the URL to hold, which
+   * is how an update we caused is told apart from one we did not. Without that
+   * distinction a pending write can fire after something else has already
+   * changed the URL and silently put the old search back.
+   */
   const [draft, setDraft] = useState(state.q);
-  const debounced = useDebouncedValue(draft, 300);
+  const requestedQuery = useRef(state.q);
+
+  const { run: scheduleQuery, cancel: cancelScheduledQuery } = useDebouncedCallback(setQuery, 300);
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setDraft(value);
+      requestedQuery.current = value;
+      scheduleQuery(value);
+    },
+    [scheduleQuery],
+  );
 
   useEffect(() => {
-    if (debounced !== state.q) setQuery(debounced);
-  }, [debounced, state.q, setQuery]);
+    // Our own change arriving back; the field already shows it.
+    if (state.q === requestedQuery.current) return;
 
-  // Keeps the field in step when the URL changes from elsewhere — the back
-  // button, a shared link opened in place, or a chip being removed.
-  useEffect(() => {
-    setDraft((current) => (current === state.q ? current : state.q));
-  }, [state.q]);
+    // Anything else changed the search — the back button, removing a chip,
+    // clearing all filters. The URL wins, so adopt it and drop any write we had
+    // scheduled, whose stale value would otherwise undo what just happened.
+    cancelScheduledQuery();
+    requestedQuery.current = state.q;
+    setDraft(state.q);
+  }, [state.q, cancelScheduledQuery]);
 
   const users = useDirectoryUsers(state);
   const facets = useDirectoryFacets(state);
@@ -73,7 +94,7 @@ export default function App() {
 
           <SearchInput
             value={draft}
-            onChange={setDraft}
+            onChange={handleSearchChange}
             isSearching={isTyping || users.isRefreshing}
           />
 
@@ -142,7 +163,7 @@ export default function App() {
             query={state.q}
             hobbies={state.hobbies}
             nationalities={state.nationalities}
-            onClearQuery={() => setDraft('')}
+            onClearQuery={() => setQuery('')}
             onRemoveHobby={toggleHobby}
             onRemoveNationality={toggleNationality}
             onClearAll={clearFilters}

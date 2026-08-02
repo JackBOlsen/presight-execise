@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FacetsResponse, UsersResponse } from 'presight-shared';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
@@ -36,6 +36,16 @@ const facetsResponse = (): FacetsResponse => ({
   hobbies: [{ value: 'Chess', count: 12 }],
   nationalities: [{ value: 'Danish', count: 7 }],
 });
+
+/** Changes the URL from outside the app, standing in for the back button. */
+function ExternalNavigation({ to }: { to: string }) {
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate(to)}>
+      navigate
+    </button>
+  );
+}
 
 /** Records every URL the app requested, so query construction can be asserted. */
 let requested: string[] = [];
@@ -256,13 +266,40 @@ describe('App', () => {
       expect(screen.getByRole('button', { name: 'Remove filter Chess' })).toBeInTheDocument();
     });
 
-    it('clears everything at once', async () => {
+    it('clears every filter at once, including the search text', async () => {
       stubApi();
       renderApp('/?q=ada&hobby=Chess&nationality=Danish');
       await userEvent.click(await screen.findByText('Clear all'));
+
+      // Asserting the request, not merely that the button disappeared: with only
+      // the search text left behind, the "Clear all" label hides anyway — which
+      // is how a regression here previously went unnoticed.
       await waitFor(() => {
-        expect(screen.queryByText('Clear all')).not.toBeInTheDocument();
+        const latest = requested.filter((url) => url.includes('/users')).at(-1)!;
+        expect(latest).not.toContain('q=');
+        expect(latest).not.toContain('hobby=');
+        expect(latest).not.toContain('nationality=');
       });
+      expect(screen.getByLabelText('Search by first or last name')).toHaveValue('');
+    });
+
+    it('does not let a pending search write undo the clear', async () => {
+      // The search box writes the URL behind a debounce. Clearing filters while
+      // that write is still scheduled must cancel it, or the stale value lands
+      // afterwards and silently restores the search.
+      stubApi();
+      renderApp('/?hobby=Chess');
+      await screen.findByText('First1 Last1');
+
+      await userEvent.type(screen.getByLabelText('Search by first or last name'), 'zzz');
+      await userEvent.click(await screen.findByText('Clear all'));
+
+      // Long enough for any surviving debounce to have fired.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      const latest = requested.filter((url) => url.includes('/users')).at(-1)!;
+      expect(latest).not.toContain('q=');
+      expect(screen.getByLabelText('Search by first or last name')).toHaveValue('');
     });
 
     it('keeps the chosen sort when clearing filters', async () => {
@@ -274,7 +311,63 @@ describe('App', () => {
         const latest = requested.filter((url) => url.includes('/users')).at(-1)!;
         expect(latest).toContain('sort=age');
         expect(latest).not.toContain('hobby=');
+        expect(latest).not.toContain('q=');
       });
+    });
+
+    it('clears the search from the empty state', async () => {
+      stubApi((url) =>
+        url.includes('/facets')
+          ? { hobbies: [], nationalities: [] }
+          : usersResponse({ data: [], total: 0 }),
+      );
+      renderApp('/?q=zzzz&hobby=Chess');
+      await userEvent.click(await screen.findByRole('button', { name: 'Clear all filters' }));
+
+      await waitFor(() => {
+        const latest = requested.filter((url) => url.includes('/users')).at(-1)!;
+        expect(latest).not.toContain('q=');
+        expect(latest).not.toContain('hobby=');
+      });
+    });
+
+    it('removes the search from its chip', async () => {
+      stubApi();
+      renderApp('/?q=ada');
+      await userEvent.click(await screen.findByRole('button', { name: 'Remove filter “ada”' }));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Search by first or last name')).toHaveValue('');
+      });
+      const latest = requested.filter((url) => url.includes('/users')).at(-1)!;
+      expect(latest).not.toContain('q=');
+    });
+
+    it('adopts a search set from outside the field, as the back button would', async () => {
+      // The URL is the source of truth; the field must follow it, not fight it.
+      // Navigating from a sibling is the same thing the back button does.
+      stubApi();
+      render(
+        <MemoryRouter initialEntries={['/?q=ada']}>
+          <QueryClientProvider
+            client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
+          >
+            <App />
+            <ExternalNavigation to="/?q=grace" />
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+
+      await waitFor(() =>
+        expect(screen.getByLabelText('Search by first or last name')).toHaveValue('ada'),
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'navigate' }));
+
+      await waitFor(() =>
+        expect(screen.getByLabelText('Search by first or last name')).toHaveValue('grace'),
+      );
+      expect(requested.some((url) => url.includes('q=grace'))).toBe(true);
     });
   });
 
