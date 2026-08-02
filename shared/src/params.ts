@@ -54,11 +54,25 @@ function normalizeFilterValues(values: readonly string[]): string[] {
   return [...new Set(cleaned)].sort((a, b) => a.localeCompare(b)).slice(0, MAX_FILTER_VALUES);
 }
 
+/**
+ * The canonical form of a search string.
+ *
+ * Exported because the search box needs it too. The field holds exactly what
+ * was typed — including a trailing space, which matters now that a space
+ * separates the given name from the family name — while the URL holds this
+ * normalised form. Being able to compare the two lets the field tell "the URL
+ * came back tidier than what I typed" apart from "something else changed the
+ * search", and only surrender its contents for the latter.
+ */
+export function normalizeQuery(value: string): string {
+  return value.trim().slice(0, MAX_QUERY_LENGTH);
+}
+
 export function parseDirectoryState(input: URLSearchParams | string): DirectoryState {
   const params = typeof input === 'string' ? new URLSearchParams(input) : input;
 
   return {
-    q: (params.get(QUERY_PARAMS.q) ?? '').trim().slice(0, MAX_QUERY_LENGTH),
+    q: normalizeQuery(params.get(QUERY_PARAMS.q) ?? ''),
     nationalities: normalizeFilterValues(params.getAll(QUERY_PARAMS.nationality)),
     hobbies: normalizeFilterValues(params.getAll(QUERY_PARAMS.hobby)),
     sort: SortFieldSchema.parse(params.get(QUERY_PARAMS.sort) ?? undefined),
@@ -81,7 +95,11 @@ export function toSearchParams(
 ): URLSearchParams {
   const params = new URLSearchParams();
 
-  if (state.q) params.set(QUERY_PARAMS.q, state.q);
+  // Normalised on the way out as well as on the way in, so writing a state and
+  // reading it back yields the same thing. Without that the URL could hold a
+  // trailing space that parsing would silently drop.
+  const query = normalizeQuery(state.q);
+  if (query) params.set(QUERY_PARAMS.q, query);
   for (const value of normalizeFilterValues(state.nationalities)) {
     params.append(QUERY_PARAMS.nationality, value);
   }

@@ -226,6 +226,51 @@ describe('App', () => {
     ).toBeLessThan(3);
   });
 
+  describe('typing a full name', () => {
+    it('keeps a trailing space after the query has been applied', async () => {
+      // The URL stores the trimmed form, but the field must keep the space:
+      // it is about to separate the given name from the family name, and
+      // losing it turns "joy abbott" into "joyabbott".
+      stubApi();
+      renderApp();
+      const field = screen.getByLabelText('Search by first or last name');
+
+      await userEvent.type(field, 'joy ');
+      await waitFor(() => expect(requested.some((url) => url.includes('q=joy'))).toBe(true));
+
+      // Well past the debounce, so the URL has come back and been reconciled.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(field).toHaveValue('joy ');
+    });
+
+    it('lets the surname be typed after the pause', async () => {
+      stubApi();
+      renderApp();
+      const field = screen.getByLabelText('Search by first or last name');
+
+      await userEvent.type(field, 'joy ');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await userEvent.type(field, 'abbott');
+
+      expect(field).toHaveValue('joy abbott');
+      await waitFor(() => {
+        expect(requested.some((url) => url.includes('q=joy+abbott'))).toBe(true);
+      });
+    });
+
+    it('writes the trimmed form to the URL', async () => {
+      stubApi();
+      renderApp();
+      await userEvent.type(screen.getByLabelText('Search by first or last name'), 'joy ');
+
+      await waitFor(() => {
+        const latest = requested.filter((url) => url.includes('/users')).at(-1)!;
+        expect(latest).toContain('q=joy');
+        expect(latest).not.toContain('q=joy+');
+      });
+    });
+  });
+
   describe('filtering from the sidebar', () => {
     it('applies a hobby and refetches both endpoints with it', async () => {
       stubApi();

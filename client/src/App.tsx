@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { normalizeQuery } from 'presight-shared';
 import { ActiveFilters } from './components/ActiveFilters';
 import { BackToTop } from './components/BackToTop';
 import { FilterDrawer } from './components/FilterDrawer';
@@ -54,8 +55,11 @@ export default function App() {
   );
 
   useEffect(() => {
-    // Our own change arriving back; the field already shows it.
-    if (state.q === requestedQuery.current) return;
+    // Our own change arriving back, compared in the URL's canonical form. The
+    // field may legitimately hold "joy " while the URL holds "joy"; treating
+    // that as somebody else's edit would snatch the trailing space away
+    // mid-word, exactly when the user is about to type a surname after it.
+    if (state.q === normalizeQuery(requestedQuery.current)) return;
 
     // Anything else changed the search — the back button, removing a chip,
     // clearing all filters. The URL wins, so adopt it and drop any write we had
@@ -68,7 +72,9 @@ export default function App() {
   const users = useDirectoryUsers(state);
   const facets = useDirectoryFacets(state);
 
-  const isTyping = draft !== state.q;
+  // Compared in canonical form too, or a trailing space would leave the search
+  // spinner running forever against a query that has in fact been applied.
+  const isTyping = normalizeQuery(draft) !== state.q;
   const activeFilterCount = state.hobbies.length + state.nationalities.length + (state.q ? 1 : 0);
 
   const sidebar = (

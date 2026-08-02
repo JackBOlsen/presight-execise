@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_DIRECTORY_STATE,
   hasActiveFilters,
+  normalizeQuery,
   parseDirectoryState,
   toSearchParams,
   toggleFilterValue,
@@ -88,6 +89,31 @@ describe('toSearchParams', () => {
     );
   });
 
+  it('normalises the search text on the way out', () => {
+    // Both directions normalise, so writing a state and reading it back gives
+    // the same thing. Trimming on read alone made the round trip lossy.
+    expect(toSearchParams({ ...DEFAULT_DIRECTORY_STATE, q: 'joy ' }).toString()).toBe('q=joy');
+    expect(toSearchParams({ ...DEFAULT_DIRECTORY_STATE, q: '  joy  ' }).toString()).toBe('q=joy');
+    expect(toSearchParams({ ...DEFAULT_DIRECTORY_STATE, q: '   ' }).toString()).toBe('');
+  });
+
+  it.each(['joy ', ' joy', '  joy  ', 'joy abbott', 'joy  abbott'])(
+    'round-trips %o to a stable value',
+    (q) => {
+      const once = parseDirectoryState(toSearchParams({ ...DEFAULT_DIRECTORY_STATE, q }));
+      const twice = parseDirectoryState(toSearchParams(once));
+      expect(twice).toEqual(once);
+    },
+  );
+
+  it('keeps a space between two names', () => {
+    // The space separates the given name from the family name, so it carries
+    // meaning and must survive the round trip.
+    expect(
+      parseDirectoryState(toSearchParams({ ...DEFAULT_DIRECTORY_STATE, q: 'joy abbott' })).q,
+    ).toBe('joy abbott');
+  });
+
   it('round-trips a fully populated state', () => {
     const original: DirectoryState = {
       q: 'ann',
@@ -97,6 +123,27 @@ describe('toSearchParams', () => {
       order: 'desc',
     };
     expect(parseDirectoryState(toSearchParams(original))).toEqual(original);
+  });
+});
+
+describe('normalizeQuery', () => {
+  it.each([
+    ['joy ', 'joy'],
+    [' joy', 'joy'],
+    ['  joy  ', 'joy'],
+    ['joy abbott', 'joy abbott'],
+    ['   ', ''],
+    ['', ''],
+  ])('normalises %o to %o', (input, expected) => {
+    expect(normalizeQuery(input)).toBe(expected);
+  });
+
+  it('is idempotent', () => {
+    expect(normalizeQuery(normalizeQuery('  joy abbott  '))).toBe('joy abbott');
+  });
+
+  it('caps an over-long query', () => {
+    expect(normalizeQuery('a'.repeat(500))).toHaveLength(100);
   });
 });
 
