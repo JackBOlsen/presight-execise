@@ -3,7 +3,7 @@
 A searchable, filterable directory of 50,000 people. React client, Node API,
 SQLite as the source of truth.
 
-## Running it
+## Running locally
 
 **Requires Node 24+** (the server uses Node's built-in SQLite driver) and
 Corepack, which ships with Node — run `corepack enable` once if `yarn` is not
@@ -16,10 +16,11 @@ yarn dev
 
 → **http://localhost:5173**
 
-The database is created and seeded on first run, so there is no separate seed
-step. The API runs on port 3000 and the client proxies `/api` to it.
+`yarn dev` starts the API, the client and the shared package's watcher together.
+The database is created and seeded on first run, so there is no separate step.
+The API listens on port 3000; the client proxies `/api` to it.
 
-### Docker
+## Running with Docker Compose
 
 ```bash
 docker compose up --build
@@ -27,12 +28,64 @@ docker compose up --build
 
 → **http://localhost:8080**
 
-The database is seeded into a named volume on first boot and reused afterwards.
-The client waits for the API's healthcheck before starting. First boot takes
-around 15 seconds while the seeder runs; later starts are immediate.
+First boot takes around 15 seconds while the seeder runs; later starts are
+immediate. The database is written to a named volume, so it survives
+`docker compose down` and is reused on the next start. To discard it and
+re-seed from scratch:
 
-The API is also published on port 3000 for direct inspection, though the browser
-does not use it — nginx proxies `/api` over the Compose network.
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+The client is held back until the API's healthcheck passes, so the first page
+load already has data behind it. The API is also published on port 3000 for
+direct inspection, though the browser does not use it — nginx proxies `/api`
+over the Compose network.
+
+The build files are `server/Dockerfile`, `client/Dockerfile` (which serves the
+built client through nginx, configured in `client/nginx.conf`) and
+`docker-compose.yml`. Both images build from the repository root, since this is
+a workspace monorepo and each build needs the lockfile and the shared package.
+
+## Database and seeding
+
+SQLite, at `server/data/users.db`. Created by the seeder and not committed.
+
+```
+users ──┬── nationality_id ──→ nationalities
+        └── user_hobbies ────→ hobbies   (junction table)
+```
+
+Hobbies are many-to-many, which is what keeps "everyone with _all_ of these
+hobbies" and the top-20 counts as indexed queries. The 0–10 hobbies rule is
+enforced in the database: the junction table's composite primary key prevents
+duplicates, and a trigger rejects an eleventh.
+
+Seeding runs automatically when the database is empty — on `yarn dev`, on
+`yarn workspace presight-server start`, and on the container's first boot. It
+skips silently when data already exists, so it is safe to run repeatedly.
+
+To run it explicitly:
+
+```bash
+# Seed if empty; does nothing otherwise
+yarn seed
+
+# Drop everything and rebuild
+yarn workspace presight-server seed --force
+
+# A smaller dataset, useful for poking at edge cases
+yarn workspace presight-server seed --count 1000 --force
+
+# All options
+yarn workspace presight-server seed --help
+```
+
+The seed is deterministic: a fixed seed value means every machine produces the
+same 50,000 users, ~250,000 hobby links, 48 nationalities and 67 hobbies. Pass
+`--seed <n>` or set `SEED_RANDOM_SEED` for a different but equally reproducible
+dataset.
 
 ## Structure
 
@@ -65,21 +118,6 @@ client/    React + Vite SPA.
 Because all four queries share one filter fragment, the sidebar counts always
 describe exactly the set being paginated.
 
-### Schema
-
-```
-users ──┬── nationality_id ──→ nationalities
-        └── user_hobbies ────→ hobbies   (junction table)
-```
-
-Hobbies are many-to-many, which is what keeps "everyone with _all_ of these
-hobbies" and the top-20 counts as indexed queries. The 0–10 hobbies rule is
-enforced in the database: the junction table's composite primary key prevents
-duplicates, and a trigger rejects an eleventh.
-
-The seed is deterministic — a fixed seed value means every machine produces the
-same 50,000 users, ~250,000 hobby links, 48 nationalities and 67 hobbies.
-
 ## Commands
 
 From the repository root:
@@ -94,12 +132,14 @@ From the repository root:
 
 Per package:
 
-| Command                                            |                                   |
-| -------------------------------------------------- | --------------------------------- |
-| `yarn workspace presight-server seed --force`      | Rebuild the database from scratch |
-| `yarn workspace presight-server seed --count 1000` | Seed a smaller dataset            |
-| `yarn workspace presight-server test:coverage`     | Coverage report                   |
-| `yarn workspace presight-client dev`               | Client only                       |
+| Command                                        |                                                 |
+| ---------------------------------------------- | ----------------------------------------------- |
+| `yarn workspace presight-server dev`           | API only                                        |
+| `yarn workspace presight-client dev`           | Client only                                     |
+| `yarn workspace presight-server test:coverage` | Coverage report                                 |
+| `yarn workspace presight-server start`         | Run the built server (needs `yarn build` first) |
+
+Seeding commands are in [Database and seeding](#database-and-seeding).
 
 ## API
 
